@@ -1,0 +1,12 @@
+{
+  "repo": "https://github.com/Neurons-AI/wordcraft.git",
+  "branch": "aiword",
+  "upstream": "https://github.com/storytold/wordcraft.git",
+  "i18nRepo": "https://github.com/Neurons-AI/craft-i18n.git",
+  "checkout": "~/aicoworker/openclaw/workspace-main/projects/wordcraft",
+  "i18nCheckout": "~/aicoworker/openclaw/workspace-main/projects/craft-i18n",
+  "webApp": "apps/wordcraft-web",
+  "dist": "dist/web",
+  "assets": "assets/wordcraft",
+  "appMirror": "aicw-app"
+}

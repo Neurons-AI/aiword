@@ -1,0 +1,208 @@
+<style>
+  .aw-bug{position:absolute;left:50%;top:8px;transform:translateX(-50%);z-index:20;display:flex;align-items:center;gap:8px;max-width:min(92%,720px);padding:8px 10px;border-radius:10px;background:#7f1d1d;color:#fff;font:13px system-ui,sans-serif;box-shadow:0 6px 20px #0006}
+  .aw-bug span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .aw-bug[hidden]{display:none}
+  .aw-root{position:fixed;inset:0;display:flex;overflow:hidden;background:#e6e6e6;
+    --aw-bg:#ffffff;--aw-fg:#1f1f1f;--aw-muted:#f2f2f2;--aw-border:#d6d6d6;--aw-sub:#616161;--aw-accent:#185abd;--aw-err-bg:#fde8e8;--aw-err-fg:#9b1c1c}
+  html[data-theme="dark"] .aw-root{background:#1f1f1f;
+    --aw-bg:#252526;--aw-fg:#e8e8e8;--aw-muted:#333336;--aw-border:#3c3c3c;--aw-sub:#b0b0b0;--aw-accent:#4f8ff7;--aw-err-bg:#4a1f1f;--aw-err-fg:#ffb4b4}
+  .aw-doc{flex:1;min-width:0;position:relative}
+  .aw-doc iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
+  .aw-load{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--aw-sub);font:14px system-ui,sans-serif;pointer-events:none}
+  .aw-side{width:min(360px,40vw);border-left:1px solid var(--aw-border);display:flex;flex-direction:column;background:var(--aw-bg);color:var(--aw-fg);font:13px/1.45 system-ui,sans-serif}
+  .aw-side.closed{display:none}
+  .aw-head{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--aw-border);font-weight:600;color:var(--aw-fg)}
+  .aw-head span{flex:1}
+  .aw-head button{background:none;border:0;color:var(--aw-sub);font-size:16px;cursor:pointer;padding:2px 6px;border-radius:4px}
+  .aw-head button:hover{background:var(--aw-muted);color:var(--aw-fg)}
+  .aw-tools{display:flex;gap:6px;padding:8px 10px;flex-wrap:wrap;border-bottom:1px solid var(--aw-border)}
+  .aw-tools button{background:transparent;color:var(--aw-fg);border:1px solid var(--aw-border);border-radius:14px;padding:3px 10px;font:12px system-ui,sans-serif;cursor:pointer}
+  .aw-tools button:hover{border-color:var(--aw-accent);color:var(--aw-accent)}
+  .aw-log{flex:1;overflow:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
+  .aw-msg{padding:8px 10px;border-radius:8px;white-space:pre-wrap;word-break:break-word;color:var(--aw-fg)}
+  .aw-msg.me{background:var(--aw-accent);color:#fff;align-self:flex-end;max-width:90%}
+  .aw-msg.ai{background:var(--aw-muted);color:var(--aw-fg)}
+  .aw-msg.err{background:var(--aw-err-bg);color:var(--aw-err-fg)}
+  .aw-form{display:flex;gap:6px;padding:8px;border-top:1px solid var(--aw-border);align-items:flex-end}
+  .aw-form textarea{flex:1;resize:none;height:58px;font:inherit;padding:6px 8px;border:1px solid var(--aw-border);border-radius:6px;background:var(--aw-bg);color:var(--aw-fg)}
+  .aw-form textarea::placeholder{color:var(--aw-sub)}
+  .aw-form button{background:var(--aw-accent);color:#fff;border:0;border-radius:6px;padding:7px 14px;font:600 12px system-ui;cursor:pointer}
+  .aw-fab{position:fixed;right:14px;bottom:34px;z-index:5;border-radius:20px;padding:6px 12px;border:0;background:var(--aw-accent,#185abd);color:#fff;font:600 12px system-ui;cursor:pointer;box-shadow:0 2px 8px #0003}
+  .aw-root.side-open ~ .aw-fab,.aw-fab.hide{display:none}
+  .aw-model{padding:6px 10px;border-bottom:1px solid var(--aw-border)}
+  .aw-model select{background:var(--aw-bg);color:var(--aw-fg);border:1px solid var(--aw-border);border-radius:4px}
+  @media (max-width:640px){.aw-side{position:absolute;right:0;top:0;bottom:0;width:100%;z-index:4}}
+</style>
+<div class="aw-root">
+  <div class="aw-bug" id="bug" hidden><span id="bugMsg"></span><button id="bugFix" class="ui-btn primary sm"></button><button id="bugX" class="ui-btn ghost sm">✕</button></div>
+  <div class="aw-doc"><div class="aw-load" id="load">Loading AI Word…</div><iframe id="wc" title="AI Word" allow="clipboard-read; clipboard-write; local-fonts"></iframe></div>
+  <aside class="aw-side closed" id="side">
+    <div class="aw-head"><span id="tTitle">✨ AI</span><button id="close">✕</button></div>
+    <div class="aw-model"><div data-model-picker></div></div>
+    <div class="aw-tools" id="tools"></div>
+    <div class="aw-log" id="log"></div>
+    <form class="aw-form" id="form"><textarea id="q"></textarea><button type="submit" id="send">Send</button></form>
+  </aside>
+</div>
+<button class="aw-fab" id="fab">✨ AI</button>
+<script>
+(function () {
+  'use strict';
+  const frame = document.getElementById('wc');
+  const side = document.getElementById('side'), log = document.getElementById('log');
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- language: follow AICoworker ----------
+  const T = {
+    title: { en: '✨ AI assistant', vi: '✨ Trợ lý AI', zh: '✨ AI 助手', ja: '✨ AI アシスタント', ko: '✨ AI 도우미' },
+    hi: { en: 'Ask me to draft, rewrite, summarize, translate or fix the document. Select text first so I work only on it.', vi: 'Anh nhờ em soạn, viết lại, tóm tắt, dịch hay sửa lỗi văn bản nha. Bôi đen chữ trước thì em chỉ làm với phần đó.', zh: '让我起草、改写、总结、翻译或校对文档。先选中文字，我只处理该部分。', ja: '文書の作成・書き直し・要約・翻訳・校正を頼んでください。先に文字を選ぶとその部分だけ処理します。', ko: '문서 작성, 다시 쓰기, 요약, 번역, 교정을 요청하세요. 먼저 텍스트를 선택하면 그 부분만 처리합니다.' },
+    ph: { en: 'e.g. Write an invitation to the parents\u2019 meeting on 20 Nov', vi: 'VD: Soạn thư mời họp phụ huynh ngày 20/11', zh: '例如：撰写 11 月 20 日家长会邀请函', ja: '例: 11月20日の保護者会の案内状を作成', ko: '예: 11월 20일 학부모 회의 초대장 작성' },
+    send: { en: 'Send', vi: 'Gửi', zh: '发送', ja: '送信', ko: '보내기' },
+    think: { en: 'Working…', vi: 'Đang làm…', zh: '处理中…', ja: '処理中…', ko: '작업 중…' },
+    done: { en: 'Done.', vi: 'Xong.', zh: '完成。', ja: '完了。', ko: '완료.' },
+    noai: { en: 'Needs AI: no model on this machine. The editor still works.', vi: 'Cần AI: máy này chưa có model. Trình soạn thảo vẫn dùng bình thường.', zh: '需要 AI：此电脑没有模型。编辑器仍可正常使用。', ja: 'AI が必要です: このマシンにモデルがありません。エディターは使えます。', ko: 'AI 필요: 이 컴퓨터에 모델이 없습니다. 편집기는 계속 사용할 수 있습니다.' },
+    err: { en: 'Error: ', vi: 'Lỗi: ', zh: '错误：', ja: 'エラー: ', ko: '오류: ' },
+    notReady: { en: 'The editor is still loading', vi: 'Trình soạn thảo chưa tải xong', zh: '编辑器仍在加载', ja: 'エディターを読み込み中です', ko: '편집기를 아직 불러오는 중입니다' },
+    bug: { en: 'The editor engine hit an error.', vi: 'Bộ soạn thảo vừa gặp lỗi.', zh: '编辑器引擎出错。', ja: 'エディターエンジンでエラーが発生しました。', ko: '편집기 엔진에 오류가 발생했습니다.' },
+    bugFix: { en: 'Ask AI to fix it', vi: 'Nhờ AI sửa', zh: '让 AI 修复', ja: 'AI に修正を依頼', ko: 'AI에게 수정 요청' },
+    bugSent: { en: 'Sent to the agent — it will fix the engine and ask you before installing.', vi: 'Đã gửi cho agent — agent sửa engine rồi hỏi anh trước khi cài.', zh: '已发送给代理——修复后会先征求你的同意。', ja: 'エージェントに送信しました。修正後、インストール前に確認します。', ko: '에이전트에 보냈습니다. 수정 후 설치 전에 확인합니다.' },
+    loading: { en: 'Loading AI Word…', vi: 'Đang tải AI Word…', zh: '正在加载 AI Word…', ja: 'AI Word を読み込み中…', ko: 'AI Word 불러오는 중…' },
+    q_rewrite: { en: 'Rewrite', vi: 'Viết lại', zh: '改写', ja: '書き直す', ko: '다시 쓰기' },
+    q_fix: { en: 'Proofread', vi: 'Sửa lỗi', zh: '校对', ja: '校正', ko: '교정' },
+    q_sum: { en: 'Summarize', vi: 'Tóm tắt', zh: '总结', ja: '要約', ko: '요약' },
+    q_tr: { en: 'Translate', vi: 'Dịch', zh: '翻译', ja: '翻訳', ko: '번역' },
+    q_cont: { en: 'Continue', vi: 'Viết tiếp', zh: '续写', ja: '続きを書く', ko: '이어 쓰기' },
+  };
+  const QUICK = [
+    ['q_rewrite', 'Rewrite the selected text to be clearer and more natural, keep the meaning. Replace the selection.'],
+    ['q_fix', 'Fix spelling, grammar and punctuation in the selected text (or the whole document if nothing is selected). Do not change the style.'],
+    ['q_sum', 'Summarize the document in 3–6 bullet points and answer with the summary only (do not edit the document).'],
+    ['q_tr', 'Translate the selected text (Vietnamese ↔ English) and replace the selection.'],
+    ['q_cont', 'Continue writing 1–2 paragraphs at the caret, in the same tone as the document.'],
+  ];
+  const WC_LANGS = ['en', 'zh-hans', 'zh-hant', 'ja', 'pt-br', 'es', 'uk', 'sr', 'sr-latn', 'et', 'tr', 'ru', 'pl', 'de', 'it', 'cs', 'hu', 'fr', 'bg', 'vi', 'ko', 'sv', 'hr', 'nl', 'da', 'ro', 'ar', 'sl'];
+  const hostLang = () => String((window.aicw && aicw.locale) || navigator.language || 'en').toLowerCase();
+  const short = () => { const b = hostLang().split(/[-_]/)[0]; return T.title[b] ? b : 'en'; };
+  const tr = (k) => T[k][short()] || T[k].en;
+  function wcLang() { const l = hostLang().replace('_', '-'); if (WC_LANGS.includes(l)) return l; if (l.startsWith('zh')) return /tw|hk|hant/.test(l) ? 'zh-hant' : 'zh-hans'; if (l === 'pt-br' || l.startsWith('pt')) return 'pt-br'; const b = l.split('-')[0]; return WC_LANGS.includes(b) ? b : 'en'; }
+  function localize() {
+    $('tTitle').textContent = tr('title'); $('q').placeholder = tr('ph'); $('send').textContent = tr('send'); $('load').textContent = tr('loading');
+    const tools = $('tools'); tools.innerHTML = '';
+    QUICK.forEach(([k, q]) => { const b = document.createElement('button'); b.textContent = tr(k); b.onclick = () => ask(q); tools.appendChild(b); });
+    if (log.children.length <= 1) { log.innerHTML = ''; say(tr('hi'), 'ai'); }
+  }
+
+  // ---------- WordCraft frame ----------
+  const BUILD = 'b6dd941886f5567f';
+  const base = (window.AIWORD_ASSETS || '') + 'wordcraft/index.html';
+  frame.src = base + '?lang=' + encodeURIComponent(wcLang()) + '&v=' + BUILD; // BUILD = wasm hash: a new engine build never comes from cache
+  // WordCraft runs in a frame on another origin: talk to window.wordcraft over postMessage.
+  let seq = 0, ready = false; const pending = new Map();
+  window.addEventListener('message', (e) => {
+    const m = e.data; if (!m || m.__aiword !== 1) return;
+    if (m.engineError) { engineBug(m.engineError); return; }
+    if (m.ready || (m.id === -1 && m.ok)) { if (!ready) { ready = true; $('load').style.display = 'none'; applyLang(); } return; }
+    const p = pending.get(m.id); if (!p) return; pending.delete(m.id);
+    m.ok ? p.resolve(m.result) : p.reject(new Error(m.error));
+  });
+  const call = (fn, ...args) => new Promise((resolve, reject) => {
+    const id = ++seq; pending.set(id, { resolve, reject });
+    frame.contentWindow.postMessage({ __aiword: 1, id, fn, args }, '*');
+    setTimeout(() => { if (pending.has(id)) { pending.delete(id); reject(new Error(tr('notReady'))); } }, 60000);
+  });
+  const api = { execute: (c, p) => call('execute', c, p || {}), request: (m, p) => call('request', m, p || {}), commands: (p) => call('commands', p || {}), docInspect: (p) => call('docInspect', p || {}), uiInspect: () => call('uiInspect'), screenshot: () => call('screenshot') };
+  const wc = () => (ready ? api : null);
+  const pinger = setInterval(() => { if (ready) return clearInterval(pinger); try { frame.contentWindow.postMessage({ __aiword: 1, id: -1, fn: 'ping' }, '*'); } catch {} }, 400);
+  // ---------- engine errors → bug ledger + "Ask AI to fix" ----------
+  // The engine is Rust compiled to WASM (scripts/engine.mjs). A panic there is a bug in the
+  // engine source, which the platform's small-fix copy cannot repair: the agent follows SKILL.md
+  // "Engine repair" (fix Rust → build → owner approves → ship).
+  let lastBug = null;
+  function engineBug(err) {
+    lastBug = { ...err, build: BUILD, at: new Date().toISOString(), lang: short() };
+    // Into the app's bug ledger (AI Apps → Manage → Self-healing) via the page-error path.
+    setTimeout(() => { throw new Error('AI Word engine ' + err.kind + ': ' + String(err.message || '').slice(0, 300)); }, 0);
+    $('bugMsg').textContent = tr('bug') + ' ' + String(err.message || '').split('\n')[0].slice(0, 140);
+    $('bugFix').textContent = tr('bugFix');
+    $('bug').hidden = false;
+  }
+  $('bugX').onclick = () => { $('bug').hidden = true; };
+  $('bugFix').onclick = async () => {
+    if (!lastBug) return;
+    const b = lastBug;
+    const text = `[ai-word engine-bug] ${b.kind} in build ${b.build}: ${String(b.message).split('\n')[0].slice(0, 200)}`;
+    try { await aicw.send(text, { app: 'ai-word', procedure: 'SKILL.md › Engine repair', kind: b.kind, build: b.build, at: b.at, message: String(b.message).slice(0, 3000), stack: String(b.stack || '').slice(0, 3000), recentCommands: b.recent || [] }); } catch (e) { $('bugMsg').textContent = String(e.message || e); return; }
+    $('bugMsg').textContent = tr('bugSent'); $('bugFix').hidden = true;
+  };
+  window.AIWordEngineBug = engineBug;
+  async function waitWc(ms = 60000) { const t = Date.now(); while (!ready) { if (Date.now() - t > ms) throw new Error(tr('notReady')); await new Promise((r) => setTimeout(r, 150)); } return api; }
+  let appliedLang = '';
+  async function applyLang() {
+    const l = wcLang(); localize(); if (l === appliedLang) return;
+    if (!ready) return; try { await api.execute('ui.language', { value: l }); appliedLang = l; } catch (e) { console.warn('ui.language', e); }
+  }
+  localize();
+  if (window.aicw && aicw.on) { aicw.on('init', applyLang); aicw.on('locale', applyLang); }
+  setInterval(() => { if (wcLang() !== appliedLang && wc()) applyLang(); }, 1500);
+
+  // ---------- AI pane ----------
+  function say(text, cls) { const d = document.createElement('div'); d.className = 'aw-msg ' + cls; d.textContent = text; log.appendChild(d); log.scrollTop = log.scrollHeight; return d; }
+  const syncFab = () => $('fab').classList.toggle('hide', !side.classList.contains('closed'));
+  new MutationObserver(syncFab).observe(side, { attributes: true, attributeFilter: ['class'] });
+  const syncTheme = () => { const t = (window.aicw && aicw.theme) || 'light'; document.documentElement.setAttribute('data-theme', t); };
+  syncTheme(); window.aicw && aicw.on && aicw.on('theme', syncTheme);
+  $('fab').onclick = () => side.classList.toggle('closed');
+  $('close').onclick = () => side.classList.add('closed');
+  $('form').onsubmit = (e) => { e.preventDefault(); const q = $('q'); if (q.value.trim()) { ask(q.value.trim()); q.value = ''; } };
+  $('q').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('form').requestSubmit(); } });
+
+  async function context(api) {
+    const doc = await api.docInspect({ text: true }).catch(() => null);
+    return doc;
+  }
+  const OUTPUT = { type: 'object', required: ['reply', 'actions'], properties: {
+    reply: { type: 'string' },
+    actions: { type: 'array', items: { type: 'object', required: ['command', 'paramsJson'], properties: { command: { type: 'string' }, paramsJson: { type: 'string', description: 'the command params as a JSON object string, e.g. {"text":"Hello"}; "{}" when none' } } } } } };
+
+  function parseAnswer(res) {
+    if (res && typeof res === 'object' && Array.isArray(res.actions)) return res; // backend `assist`
+    if (res && res.structuredContent && typeof res.structuredContent === 'object') return res.structuredContent;
+    const txt = typeof res === 'string' ? res : (res && (res.content || res.text || res.reply)) || '';
+    const t = String(Array.isArray(txt) ? txt.map((c) => c.text || '').join('') : txt);
+    const a = t.indexOf('{'), b = t.lastIndexOf('}');
+    if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch {} }
+    return { reply: t.trim(), actions: [] };
+  }
+  let busy = false;
+  async function ask(question) {
+    if (busy) return; side.classList.remove('closed'); say(question, 'me'); const wait = say(tr('think'), 'ai'); busy = true;
+    try {
+      await (window.aicw && aicw.ready ? aicw.ready() : null);
+      if (!(window.aicw && aicw.call)) { wait.textContent = tr('noai'); return; }
+      const api = await waitWc();
+      const doc = await context(api);
+      const docTxt = JSON.stringify(doc || {});
+      const prompt = `You are the writing assistant inside AI Word (a Word-compatible word processor).
+User request: ${question}
+Document (JSON from document.inspect: blocks with text/style, selection with anchor/focus positions): ${docTxt.slice(0, 24000)}
+Answer with JSON {reply, actions}. "reply": short answer in the user's interface language (${short()}). "actions": editor commands to change the document, run in order; each is {command, paramsJson (the params object as a JSON string)}.
+Useful commands (exact ids): "select.text" {text, occurrence?} selects the n-th occurrence of a phrase; "select.range" {anchor:Pos, focus:Pos} with Pos exactly as in document.inspect ({story:"body", path:[blockIndex], off:byteOffset}); "select.paragraph" {}; "select.all" {}; "text.insert" {text, paragraphs?:true} inserts at the caret and replaces the selection (paragraphs:true = each line becomes a paragraph); "text.newParagraph" {}; "styles.apply" {style:"Heading 1"|"Heading 2"|"Title"|"Normal"|…}; "para.heading1"/"para.heading2"/"para.normal" {}; "format.bold"/"format.italic" {}; "para.bullets" {}; "para.numbering" {}; "para.alignCenter" {}; "insert.table" {rows, cols}.
+To rewrite part of the text: "select.text" with the exact old phrase, then "text.insert" with the new text. To write new content at the caret: one "text.insert" with paragraphs:true, then style lines with "select.text" + "styles.apply". Write the document text in the document's own language unless asked to translate.
+If unsure about a command id, use {command:"engine.commands", paramsJson:"{\\"search\\":\\"keyword\\"}"}. If no change is needed, actions = [].`;
+      const res = await aicw.call('assist', { prompt });
+      const data = parseAnswer(res);
+      wait.textContent = data.reply || tr('done');
+      for (const a of data.actions || []) {
+        try {
+          let prm = a.params || {}; if (typeof a.paramsJson === 'string') { try { prm = JSON.parse(a.paramsJson || '{}') || {}; } catch { prm = {}; } }
+          const r = a.command === 'engine.commands' ? await api.commands(prm) : await api.execute(a.command, prm);
+          if (r && r.ok === false) say(tr('err') + a.command + ': ' + r.error, 'err');
+        } catch (e) { say(tr('err') + a.command + ': ' + (e.message || e), 'err'); }
+      }
+    } catch (e) { wait.className = 'aw-msg err'; wait.textContent = tr('err') + (e.message || e); }
+    finally { busy = false; }
+  }
+  window.aicw && aicw.on && aicw.on('event:aicw.stop', () => { busy = false; });
+  window.AIWordHost = { wc, waitWc, ask, applyLang, api };
+})();
+</script>

@@ -1,0 +1,290 @@
+{
+  "schema": "aicw.app.v1",
+  "name": "AI Word",
+  "icon": "📝",
+  "version": "0.1.0",
+  "description": "Trình soạn thảo kiểu MS Word trong AICoworker: ribbon, kiểu, bảng, theo dõi thay đổi, tham chiếu, trộn thư; mở/lưu .docx .doc .odt .rtf .html .md .tex .txt, xuất PDF; trợ lý AI viết hộ.",
+  "window": {
+    "entry": "assets/app.html",
+    "style": "clean",
+    "session": "dedicated",
+    "libs": [
+      "aicw-app",
+      "skill:ai-word/boot.js"
+    ]
+  },
+  "backend": {
+    "runtime": "node",
+    "entry": "backend/main.mjs",
+    "commands": {
+      "open": {
+        "description": "Mở một tệp đã tải lên (docx, docm, dotx, dotm, doc, dot, rtf, odt, ott, html, mht, xml, md, txt) và trả về HTML để soạn thảo.",
+        "args": {
+          "type": "object",
+          "required": [
+            "fileId"
+          ],
+          "properties": {
+            "fileId": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "required": [
+            "html"
+          ],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "html": {
+              "type": "string"
+            },
+            "warnings": {
+              "type": "array"
+            }
+          }
+        }
+      },
+      "importText": {
+        "description": "Chuyển nội dung chữ (md, txt, html, rtf) thành HTML.",
+        "args": {
+          "type": "object",
+          "required": [
+            "name",
+            "text"
+          ],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "required": [
+            "html"
+          ],
+          "properties": {
+            "html": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "save": {
+        "description": "Lưu tài liệu ra tệp (docx, dotx, odt, html, rtf, doc, md, txt) và trả về link tải.",
+        "mutating": true,
+        "args": {
+          "type": "object",
+          "required": [
+            "format"
+          ],
+          "properties": {
+            "format": {
+              "type": "string",
+              "enum": [
+                "docx",
+                "dotx",
+                "odt",
+                "html",
+                "rtf",
+                "doc",
+                "md",
+                "txt"
+              ]
+            },
+            "title": {
+              "type": "string"
+            },
+            "html": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "contentXml": {
+              "type": "string"
+            },
+            "page": {
+              "type": "object"
+            },
+            "parts": {
+              "type": "object"
+            },
+            "media": {
+              "type": "array"
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "required": [
+            "id",
+            "url",
+            "name"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "bytes": {
+              "type": "number"
+            }
+          }
+        }
+      },
+      "recent": {
+        "description": "Danh sách tài liệu gần đây của người dùng.",
+        "args": {
+          "type": "object",
+          "properties": {}
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array"
+            }
+          }
+        }
+      },
+      "saveDraft": {
+        "description": "Tự lưu bản nháp đang soạn.",
+        "mutating": true,
+        "args": {
+          "type": "object",
+          "required": [
+            "html"
+          ],
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "html": {
+              "type": "string"
+            },
+            "header": {
+              "type": "string"
+            },
+            "footer": {
+              "type": "string"
+            },
+            "page": {
+              "type": "object"
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "loadDraft": {
+        "description": "Lấy bản nháp tự lưu gần nhất.",
+        "args": {
+          "type": "object",
+          "properties": {}
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "draft": {}
+          }
+        }
+      },
+      "readSheet": {
+        "description": "Đọc trang tính đầu tiên của tệp .xlsx (danh sách người nhận để trộn thư).",
+        "args": {
+          "type": "object",
+          "required": [
+            "fileId"
+          ],
+          "properties": {
+            "fileId": {
+              "type": "string"
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "required": [
+            "rows"
+          ],
+          "properties": {
+            "rows": {
+              "type": "array"
+            }
+          }
+        }
+      },
+      "assist": {
+        "description": "Trợ lý ✨ AI: nhận yêu cầu + nội dung tài liệu, trả lời ngắn và danh sách lệnh soạn thảo.",
+        "args": {
+          "type": "object",
+          "required": [
+            "prompt"
+          ],
+          "properties": {
+            "prompt": {
+              "type": "string"
+            }
+          }
+        },
+        "timeoutMs": 180000
+      }
+    }
+  },
+  "ai": {
+    "model": {
+      "recommended": "anthropic/claude-sonnet-4-6",
+      "alternatives": [
+        "local-llm/gemma-4-e2b"
+      ],
+      "note": "Viết lại, tóm tắt, dịch cần model viết tiếng Việt tốt; model nhỏ chạy được nhưng văn kém hơn."
+    }
+  },
+  "permissions": {
+    "llm": true,
+    "agent": true,
+    "host": [],
+    "schedule": false
+  },
+  "setup": {
+    "install": [
+      {
+        "kind": "npm"
+      }
+    ],
+    "health": {
+      "ready": {
+        "command": "recent"
+      }
+    }
+  },
+  "secrets": [],
+  "requires": {
+    "aicoworker": ">=2026.8.5"
+  }
+}

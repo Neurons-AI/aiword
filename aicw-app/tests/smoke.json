@@ -1,0 +1,74 @@
+[
+ {
+  "command": "importText",
+  "args": {
+   "name": "a.md",
+   "text": "# Xin chào\n- **một**"
+  },
+  "expect": {
+   "html": "<h1>Xin chào</h1><ul><li><b>một</b></li></ul>"
+  }
+ },
+ {
+  "command": "save",
+  "args": {
+   "format": "docx",
+   "title": "Thử",
+   "html": "<p>Xin <b>chào</b></p>"
+  }
+ },
+ {
+  "command": "open",
+  "args": {
+   "fileId": "f1",
+   "name": "sample.docx"
+  },
+  "mock": {
+   "files.path": "tests/fixtures/sample.docx"
+  }
+ },
+ {
+  "command": "save",
+  "args": {
+   "format": "txt",
+   "title": "Thử",
+   "text": "abc"
+  }
+ },
+ {
+  "command": "saveDraft",
+  "args": {
+   "title": "x",
+   "html": "<p>x</p>"
+  }
+ },
+ {
+  "command": "loadDraft",
+  "args": {}
+ },
+ {
+  "command": "recent",
+  "args": {}
+ },
+ {
+  "command": "readSheet",
+  "args": {
+   "fileId": "x"
+  },
+  "mock": {
+   "files.path": "tests/fixtures/list.xlsx"
+  },
+  "expect": {
+   "rows": [
+    [
+     "HoTen",
+     "Email"
+    ],
+    [
+     "Lan",
+     "lan@x.vn"
+    ]
+   ]
+  }
+ }
+]

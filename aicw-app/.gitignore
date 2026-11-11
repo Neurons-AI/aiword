@@ -1,0 +1,7 @@
+.aicw-dev/
+node_modules/
+__pycache__/
+.engine-staging/
+.engine-backups/
+.engine-state.json
+.engine-build.log

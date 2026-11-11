@@ -1,0 +1,2 @@
+{ "name": "ai-word-backend", "private": true, "type": "module",
+  "dependencies": { "mammoth": "^1.8.0", "html-to-docx": "^1.8.0", "word-extractor": "^1.0.4", "jszip": "^3.10.1" } }
