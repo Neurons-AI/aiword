@@ -32,6 +32,14 @@ impl WordApp {
     pub fn apply_prefs(&mut self, ui: UiState) {
         self.ui = ui;
         self.ui.backstage = false;
+        // AI Word build: no community button, and names saved by an older WordCraft run are rebranded.
+        self.ui.show_discord = false;
+        if let Some(a) = self.ui.author.as_mut() && a.contains("WordCraft") {
+            *a = a.replace("WordCraft", "AI Word");
+            if self.ui.initials == "WU" {
+                self.ui.initials = String::new();
+            }
+        }
         // Word opens on Home every launch, so the tab `ui.json` holds is not restored. Going File
         // and back to the editor within the run still returns to the tab that was showing.
         self.ui.tab = DEFAULT_TAB.into();
