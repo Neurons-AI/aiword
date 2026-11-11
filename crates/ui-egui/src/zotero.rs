@@ -114,12 +114,12 @@ fn start(app: &mut WordApp, cmd: Command, ctx: Option<egui::Context>) -> Result<
         let r = wordcraft_zotero::client::run_command(&opts, cmd, &mut |call| {
             let (tx, rx) = channel();
             if call_tx.send(Pending { call: call.clone(), reply: tx }).is_err() {
-                return Err("WordCraft closed the document".into());
+                return Err("AI Word closed the document".into());
             }
             if let Some(c) = &wake {
                 c.request_repaint();
             }
-            rx.recv().unwrap_or_else(|_| Err("WordCraft closed the document".into()))
+            rx.recv().unwrap_or_else(|_| Err("AI Word closed the document".into()))
         });
         let _ = done_tx.send(r.map_err(|e| e.to_string()));
         if let Some(c) = &wake {
@@ -182,7 +182,7 @@ pub fn poll(app: &mut WordApp, ctx: &egui::Context) {
         app.zotero.methods.push(p.call.method.clone());
         if app.session.document_id() != app.zotero.document {
             // New or Open replaced the document this command started in: its edits must not land in the new one.
-            let _ = p.reply.send(Err("WordCraft replaced the document this command started in".into()));
+            let _ = p.reply.send(Err("AI Word replaced the document this command started in".into()));
             continue;
         }
         let rev = app.session.rev();

@@ -423,7 +423,26 @@ pub fn tr(lang: Lang, s: &str) -> &str {
     if pseudo::on() {
         return I18N.t(craft_i18n::Lang::PSEUDO, s);
     }
-    lang.i18n().t(lang.lang, s)
+    brand(lang.i18n().t(lang.lang, s))
+}
+
+/// AI Word build: the product name shown everywhere is "AI Word", not "WordCraft".
+/// Strings are a fixed set, so the rewritten copies are cached once and live for the program.
+pub fn brand(s: &str) -> &str {
+    if !s.contains("WordCraft") && !s.contains("ArtCraft") {
+        return s;
+    }
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    static CACHE: std::sync::OnceLock<Mutex<HashMap<String, &'static str>>> = std::sync::OnceLock::new();
+    let m = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut g = m.lock().unwrap();
+    if let Some(v) = g.get(s) {
+        return v;
+    }
+    let v: &'static str = Box::leak(s.replace("WordCraft", "AI Word").replace("ArtCraft Team", "AI Word").replace("ArtCraft", "AI Word").into_boxed_str());
+    g.insert(s.to_string(), v);
+    v
 }
 
 /// Left-to-right mark: it keeps what it touches from joining a right-to-left run next to it.
