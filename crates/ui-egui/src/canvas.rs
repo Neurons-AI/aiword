@@ -1785,7 +1785,17 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                     ui.ctx().request_repaint();
                 }
                 let color = caret_color(app);
-                let g = painter.layout_no_wrap(app.canvas.ime_preedit.clone(), regular(c.height * scale * 0.8), Color32::PLACEHOLDER);
+                // AI Word: draw the composition at the caret's real font size (points × zoom), not 80% of
+                // the line height, which made a Vietnamese word being typed look bigger than its text.
+                let typing_pt = {
+                    let s = &app.session;
+                    let tp = s.typing_props();
+                    let pstyle = s.doc.para_at(&s.sel.focus).and_then(|p| p.props.style.clone());
+                    let r = s.doc.styles.resolve_char(pstyle.as_deref(), &tp);
+                    if r.size.is_finite() && r.size > 0.0 { r.size } else { 11.0 }
+                };
+                let px = (typing_pt * scale).min(c.height * scale).max(4.0);
+                let g = painter.layout_no_wrap(app.canvas.ime_preedit.clone(), regular(px), Color32::PLACEHOLDER);
                 let at = preedit_cursor_chars(&app.canvas.ime_preedit, app.canvas.ime_preedit_range.as_ref());
                 ime_dx = g.pos_from_cursor(egui::text::CCursor::new(at)).min.x;
                 let r = Rect::from_min_size(pos2(x, y1 - g.size().y), g.size());
