@@ -41,10 +41,15 @@ fn two_lines(label: &str) -> String {
 
 /// A chevron over a ribbon edge that is also a button; `true` on the frame it is clicked.
 pub(super) fn edge_cue(ui: &mut Ui, rect: Rect, glyph: &str, hint: &str, t: &Tokens) -> bool {
+    // AI Word: a real button like AI Sheet's (bordered, chevron icon, hover fill), not a faint glyph.
     let resp = ui.interact(rect, ui.scope_id().with(glyph), Sense::click()).on_hover_text(hint);
-    let ink = if resp.hovered() { t.text } else { t.text_dim };
-    ui.painter().rect_filled(rect, 0.0, t.ribbon);
-    ui.painter().text(rect.center(), Align2::CENTER_CENTER, glyph, egui::FontId::proportional(18.0), ink);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, hint));
+    let r = rect.shrink2(vec2(0.0, 2.0));
+    ui.painter().rect_filled(r, 4.0, if resp.hovered() { t.hover } else { t.ribbon });
+    ui.painter().rect_stroke(r, 4.0, egui::Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
+    let icon = if glyph == "‹" { "chevronLeft" } else { "chevronRight" };
+    crate::icons::paint(ui.painter(), Rect::from_center_size(r.center(), vec2(14.0, 14.0)), icon, t.text, t.accent);
+    let _ = Align2::CENTER_CENTER;
     resp.clicked()
 }
 

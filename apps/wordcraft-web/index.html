@@ -12,6 +12,28 @@
     #wordcraft_loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
       color: #555; font: 14px system-ui, sans-serif; pointer-events: none; }
   </style>
+  <script>
+  /* AI Word: the AI App page talks to window.wordcraft over postMessage (the frame is another origin),
+     and passes the AICoworker UI language (?lang=xx) on to the editor. */
+  (function () {
+    var q = new URLSearchParams(location.search).get('lang');
+    function ok(m, r) { parent.postMessage({ __aiword: 1, id: m.id, ok: true, result: r }, '*'); }
+    function bad(m, e) { parent.postMessage({ __aiword: 1, id: m.id, ok: false, error: String((e && e.message) || e) }, '*'); }
+    window.addEventListener('message', function (e) {
+      var m = e.data; if (!m || m.__aiword !== 1 || e.source !== parent) return;
+      var wc = window.wordcraft;
+      if (m.fn === 'ping') { if (wc && wc.execute) ok(m, true); return; }
+      if (!wc || typeof wc[m.fn] !== 'function') return bad(m, 'not ready');
+      Promise.resolve().then(function () { return wc[m.fn].apply(wc, m.args || []); }).then(function (r) { ok(m, r); }, function (err) { bad(m, err); });
+    });
+    var t = setInterval(function () {
+      if (!(window.wordcraft && window.wordcraft.execute)) return;
+      clearInterval(t);
+      if (q) window.wordcraft.execute('ui.language', { value: q }).catch(function () {});
+      parent.postMessage({ __aiword: 1, ready: true }, '*');
+    }, 200);
+  })();
+  </script>
 </head>
 <body>
   <canvas id="wordcraft_canvas"></canvas>
