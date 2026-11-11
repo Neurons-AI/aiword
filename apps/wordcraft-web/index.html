@@ -19,11 +19,29 @@
     var q = new URLSearchParams(location.search).get('lang');
     function ok(m, r) { parent.postMessage({ __aiword: 1, id: m.id, ok: true, result: r }, '*'); }
     function bad(m, e) { parent.postMessage({ __aiword: 1, id: m.id, ok: false, error: String((e && e.message) || e) }, '*'); }
+    // Engine errors (a Rust panic, a WASM trap, an uncaught JS error) go to the host page, which
+    // offers "Ask AI to fix it" and records the bug. eframe prints a panic with console.error.
+    var sent = {}, lastCmds = [];
+    function report(kind, msg, stack) {
+      msg = String(msg || '').slice(0, 4000); var key = kind + msg.slice(0, 200);
+      if (sent[key]) return; sent[key] = 1;
+      try { parent.postMessage({ __aiword: 1, engineError: { kind: kind, message: msg, stack: String(stack || '').slice(0, 6000), recent: lastCmds.slice(-12) } }, '*'); } catch (_) {}
+    }
+    var ce = console.error;
+    console.error = function () {
+      var t = Array.prototype.map.call(arguments, function (a) { return (a && (a.stack || a.message)) || String(a); }).join(' ');
+      if (/panicked at|RuntimeError|unreachable|wasm-bindgen|memory access out of bounds/i.test(t)) report('panic', t, '');
+      return ce.apply(console, arguments);
+    };
+    window.addEventListener('error', function (e) { report('error', e.message, e.error && e.error.stack); });
+    window.addEventListener('unhandledrejection', function (e) { var r = e.reason || {}; if (/RuntimeError|unreachable|panicked/i.test(String(r.message || r))) report('panic', r.message || r, r.stack); });
     window.addEventListener('message', function (e) {
       var m = e.data; if (!m || m.__aiword !== 1 || e.source !== parent) return;
       var wc = window.wordcraft;
       if (m.fn === 'ping') { if (wc && wc.execute) ok(m, true); return; }
       if (!wc || typeof wc[m.fn] !== 'function') return bad(m, 'not ready');
+      if (m.fn === 'execute' || m.fn === 'request') { lastCmds.push(m.fn + ' ' + JSON.stringify(m.args || []).slice(0, 200)); if (lastCmds.length > 30) lastCmds.shift(); }
+      if (m.fn === '__testPanic') { report('panic', 'panicked at test: AI Word engine-error drill (no real bug)', ''); return ok(m, true); }
       Promise.resolve().then(function () { return wc[m.fn].apply(wc, m.args || []); }).then(function (r) { ok(m, r); }, function (err) { bad(m, err); });
     });
     var t = setInterval(function () {
