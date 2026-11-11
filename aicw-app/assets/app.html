@@ -32,6 +32,23 @@
   .aw-model{padding:6px 10px;border-bottom:1px solid var(--aw-border)}
   .aw-model select{background:var(--aw-bg);color:var(--aw-fg);border:1px solid var(--aw-border);border-radius:4px}
   @media (max-width:640px){.aw-side{position:absolute;right:0;top:0;bottom:0;width:100%;z-index:4}}
+  .aw-gf{position:fixed;right:14px;bottom:74px;z-index:6;width:min(340px,calc(100vw - 28px));max-height:min(70vh,520px);display:flex;flex-direction:column;background:var(--aw-bg);color:var(--aw-fg);border:1px solid var(--aw-border);border-radius:10px;box-shadow:0 8px 28px #0004;font:13px system-ui,sans-serif}
+  .aw-gf[hidden]{display:none}
+  .aw-gf header{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--aw-border);font-weight:600}
+  .aw-gf header span{flex:1}
+  .aw-gf header button{background:none;border:0;color:inherit;cursor:pointer;font-size:14px}
+  .aw-gf .gf-bar{display:flex;gap:6px;padding:8px 10px}
+  .aw-gf input,.aw-gf select{flex:1;min-width:0;padding:5px 7px;border:1px solid var(--aw-border);border-radius:6px;background:transparent;color:inherit;font:inherit}
+  .aw-gf select{flex:0 0 auto}
+  .aw-gf .gf-list{flex:1;overflow:auto;padding:0 6px 8px}
+  .aw-gf .gf-item{display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border:0;border-radius:6px;background:none;color:inherit;text-align:left;cursor:pointer}
+  .aw-gf .gf-item:hover{background:var(--aw-hover,#8882)}
+  .aw-gf .gf-item b{flex:1;font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .aw-gf .gf-item small{opacity:.6}
+  .aw-gf .gf-item .ok{color:#2e7d32}
+  .aw-gf .gf-note{padding:4px 10px 8px;opacity:.7;font-size:12px}
+  .aw-gfab{position:fixed;right:84px;bottom:34px;z-index:5;border-radius:20px;padding:6px 12px;border:1px solid var(--aw-border);background:var(--aw-bg);color:var(--aw-fg);font:600 12px system-ui;cursor:pointer;box-shadow:0 2px 8px #0002}
+  .aw-gfab.hide{display:none}
 </style>
 <div class="aw-root">
   <div class="aw-bug" id="bug" hidden><span id="bugMsg"></span><button id="bugFix" class="ui-btn primary sm"></button><button id="bugX" class="ui-btn ghost sm">✕</button></div>
@@ -45,6 +62,14 @@
   </aside>
 </div>
 <button class="aw-fab" id="fab">✨ AI</button>
+<button class="aw-gfab" id="gfab" title="Google Fonts">Aa Fonts</button>
+<div class="aw-gf" id="gf" hidden>
+  <header><span id="gfTitle">Google Fonts</span><button id="gfX">✕</button></header>
+  <div class="gf-bar"><input id="gfQ" type="search" autocomplete="off"><select id="gfCat"><option value="">*</option><option>Sans Serif</option><option>Serif</option><option>Display</option><option>Handwriting</option><option>Monospace</option></select></div>
+  <label class="gf-note"><input type="checkbox" id="gfVi" checked> <span id="gfViL">Vietnamese</span></label>
+  <div class="gf-list" id="gfList"></div>
+  <div class="gf-note" id="gfNote"></div>
+</div>
 <script>
 (function () {
   'use strict';
@@ -54,6 +79,14 @@
 
   // ---------- language: follow AICoworker ----------
   const T = {
+    gfTitle: { en: 'Google Fonts', vi: 'Phông Google', zh: 'Google 字体', ja: 'Google フォント', ko: 'Google 글꼴' },
+    gfBtn: { en: 'Aa Fonts', vi: 'Aa Phông', zh: 'Aa 字体', ja: 'Aa フォント', ko: 'Aa 글꼴' },
+    gfSearch: { en: 'Search 1,900+ fonts…', vi: 'Tìm trong 1.900+ phông…', zh: '搜索 1900+ 字体…', ja: '1900 以上のフォントを検索…', ko: '1,900+ 글꼴 검색…' },
+    gfVi: { en: 'Has Vietnamese', vi: 'Có tiếng Việt', zh: '含越南语', ja: 'ベトナム語対応', ko: '베트남어 지원' },
+    gfHint: { en: 'Click a font: it is installed and applied to the selection. Fonts a document uses are loaded from Google by themselves.', vi: 'Bấm một phông: phông được cài và áp dụng cho vùng chọn. Phông tài liệu dùng mà máy chưa có sẽ tự tải từ Google.', zh: '点击字体即可安装并应用到所选文字。文档用到的字体会自动从 Google 加载。', ja: 'クリックでインストールして選択範囲に適用。文書のフォントは自動で Google から読み込みます。', ko: '글꼴을 누르면 설치 후 선택 영역에 적용됩니다. 문서에 쓰인 글꼴은 Google에서 자동으로 불러옵니다.' },
+    gfLoading: { en: 'Loading…', vi: 'Đang tải…', zh: '加载中…', ja: '読み込み中…', ko: '불러오는 중…' },
+    gfAdded: { en: 'Installed', vi: 'Đã cài', zh: '已安装', ja: 'インストール済み', ko: '설치됨' },
+    gfAuto: { en: 'Loaded from Google Fonts:', vi: 'Đã tự tải từ Google Fonts:', zh: '已从 Google Fonts 加载：', ja: 'Google Fonts から読み込み:', ko: 'Google Fonts에서 불러옴:' },
     title: { en: '✨ AI assistant', vi: '✨ Trợ lý AI', zh: '✨ AI 助手', ja: '✨ AI アシスタント', ko: '✨ AI 도우미' },
     hi: { en: 'Ask me to draft, rewrite, summarize, translate or fix the document. Select text first so I work only on it.', vi: 'Anh nhờ em soạn, viết lại, tóm tắt, dịch hay sửa lỗi văn bản nha. Bôi đen chữ trước thì em chỉ làm với phần đó.', zh: '让我起草、改写、总结、翻译或校对文档。先选中文字，我只处理该部分。', ja: '文書の作成・書き直し・要約・翻訳・校正を頼んでください。先に文字を選ぶとその部分だけ処理します。', ko: '문서 작성, 다시 쓰기, 요약, 번역, 교정을 요청하세요. 먼저 텍스트를 선택하면 그 부분만 처리합니다.' },
     ph: { en: 'e.g. Write an invitation to the parents\u2019 meeting on 20 Nov', vi: 'VD: Soạn thư mời họp phụ huynh ngày 20/11', zh: '例如：撰写 11 月 20 日家长会邀请函', ja: '例: 11月20日の保護者会の案内状を作成', ko: '예: 11월 20일 학부모 회의 초대장 작성' },
@@ -125,6 +158,10 @@
     $('bugMsg').textContent = tr('bug') + ' ' + String(err.message || '').split('\n')[0].slice(0, 140);
     $('bugFix').textContent = tr('bugFix');
     $('bug').hidden = false;
+    // No click needed: the backend hands it to the agent (deduplicated). The button stays as a manual retry.
+    if (window.aicw && aicw.call) aicw.call('reportEngineBug', { kind: lastBug.kind, message: String(lastBug.message || ''), stack: String(lastBug.stack || ''), build: lastBug.build, at: lastBug.at, recent: lastBug.recent || [] })
+      .then((r) => { if (r && (r.sent || r.already)) { $('bugMsg').textContent = tr('bugSent'); $('bugFix').hidden = true; } })
+      .catch(() => {});
   }
   $('bugX').onclick = () => { $('bug').hidden = true; };
   $('bugFix').onclick = async () => {
@@ -145,9 +182,66 @@
   if (window.aicw && aicw.on) { aicw.on('init', applyLang); aicw.on('locale', applyLang); }
   setInterval(() => { if (wcLang() !== appliedLang && wc()) applyLang(); }, 1500);
 
+
+  // ---------- Google Fonts ----------
+  // Search the catalog (backend, cached a week), click to install into the engine (font.add) and apply
+  // to the selection; fonts a document names but the machine lacks are fetched from Google by themselves.
+  const gf = $('gf'); const installed = new Set();
+  function gfLocalize() { $('gfTitle').textContent = tr('gfTitle'); $('gfab').textContent = tr('gfBtn'); $('gfQ').placeholder = tr('gfSearch'); $('gfViL').textContent = tr('gfVi'); $('gfNote').textContent = tr('gfHint'); }
+  async function installGoogleFont(family) {
+    if (installed.has(family.toLowerCase())) return true;
+    const api = await waitWc();
+    const r = await aicw.call('googleFontFiles', { family });
+    if (!r.found || !r.files.length) { installed.add(family.toLowerCase()); return false; }  // not a Google font: skip quietly
+    for (const f of r.files) { try { await api.execute('font.add', { data: f.data, name: f.name }); } catch (e) { if (!/already/i.test(String(e.message))) throw e; } }
+    installed.add(family.toLowerCase());
+    return true;
+  }
+  let gfSeq = 0;
+  async function gfSearch() {
+    const my = ++gfSeq; const list = $('gfList'); list.textContent = tr('gfLoading');
+    try {
+      const r = await aicw.call('googleFonts', { query: $('gfQ').value, category: $('gfCat').value, limit: 120 });
+      if (my !== gfSeq) return;
+      list.textContent = '';
+      for (const f of r.families) {
+        if ($('gfVi').checked && !f.vietnamese) continue;
+        const b = document.createElement('button'); b.className = 'gf-item';
+        b.innerHTML = '<b></b><small></small>'; b.querySelector('b').textContent = f.family; b.querySelector('small').textContent = installed.has(f.family.toLowerCase()) ? '✓' : f.category;
+        b.onclick = async () => {
+          b.querySelector('small').textContent = '…';
+          try {
+            if (!(await installGoogleFont(f.family))) throw new Error('not available');
+            const api = await waitWc(); await api.execute('format.set', { props: { font: f.family } });
+            b.querySelector('small').textContent = '✓'; b.querySelector('small').className = 'ok';
+          } catch (e) { b.querySelector('small').textContent = '!'; b.title = String(e.message || e); }
+        };
+        list.appendChild(b);
+      }
+    } catch (e) { if (my === gfSeq) list.textContent = String(e.message || e); }
+  }
+  let gfT = 0;
+  $('gfQ').addEventListener('input', () => { clearTimeout(gfT); gfT = setTimeout(gfSearch, 250); });
+  $('gfCat').onchange = gfSearch; $('gfVi').onchange = gfSearch;
+  $('gfab').onclick = () => { gf.hidden = !gf.hidden; if (!gf.hidden) { gfLocalize(); gfSearch(); $('gfQ').focus(); } };
+  $('gfX').onclick = () => { gf.hidden = true; };
+  // Missing fonts of the open document → fetch the ones Google has (checked every few seconds; cheap).
+  const triedMissing = new Set();
+  async function autoLoadMissing() {
+    if (!ready) return;
+    let m; try { m = await api.execute('font.missing', {}); } catch { return; }
+    const want = (m && m.missing || []).map((x) => x.font).filter((f) => f && !triedMissing.has(f.toLowerCase())).slice(0, 4);
+    const got = [];
+    for (const fam of want) { triedMissing.add(fam.toLowerCase()); try { if (await installGoogleFont(fam)) got.push(fam); } catch {} }
+    if (got.length) console.info(tr('gfAuto'), got.join(', '));  // font.add re-lays out the document itself
+  }
+  setInterval(autoLoadMissing, 4000);
+  gfLocalize();
+  window.AIWordFonts = { installGoogleFont, autoLoadMissing };
+
   // ---------- AI pane ----------
   function say(text, cls) { const d = document.createElement('div'); d.className = 'aw-msg ' + cls; d.textContent = text; log.appendChild(d); log.scrollTop = log.scrollHeight; return d; }
-  const syncFab = () => $('fab').classList.toggle('hide', !side.classList.contains('closed'));
+  const syncFab = () => { const open = !side.classList.contains('closed'); $('fab').classList.toggle('hide', open); $('gfab').classList.toggle('hide', open); };
   new MutationObserver(syncFab).observe(side, { attributes: true, attributeFilter: ['class'] });
   const syncTheme = () => { const t = (window.aicw && aicw.theme) || 'light'; document.documentElement.setAttribute('data-theme', t); };
   syncTheme(); window.aicw && aicw.on && aicw.on('theme', syncTheme);

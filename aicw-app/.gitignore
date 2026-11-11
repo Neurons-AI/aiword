@@ -5,3 +5,6 @@ __pycache__/
 .engine-backups/
 .engine-state.json
 .engine-build.log
+engine.local.json
+data/
+.engine-*

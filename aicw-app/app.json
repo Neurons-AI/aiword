@@ -253,6 +253,127 @@
           }
         },
         "timeoutMs": 180000
+      },
+      "reportEngineBug": {
+        "description": "The page reports an engine crash; hands it to the agent for repair (once per message per 6 h).",
+        "mutating": true,
+        "args": {
+          "type": "object",
+          "required": [
+            "message"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "stack": {
+              "type": "string"
+            },
+            "build": {
+              "type": "string"
+            },
+            "at": {
+              "type": "string"
+            },
+            "recent": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "sent": {
+              "type": "boolean"
+            },
+            "already": {
+              "type": "boolean"
+            },
+            "since": {
+              "type": "number"
+            }
+          }
+        }
+      },
+      "googleFonts": {
+        "description": "Search the Google Fonts catalog (cached a week).",
+        "args": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            },
+            "limit": {
+              "type": "number"
+            },
+            "category": {
+              "type": "string"
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "required": [
+            "families"
+          ],
+          "properties": {
+            "total": {
+              "type": "number"
+            },
+            "count": {
+              "type": "number"
+            },
+            "families": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "timeoutMs": 60000
+      },
+      "googleFontFiles": {
+        "description": "Download one Google Fonts family (regular/bold/italic) as base64 TTF files for the engine.",
+        "args": {
+          "type": "object",
+          "required": [
+            "family"
+          ],
+          "properties": {
+            "family": {
+              "type": "string"
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "required": [
+            "family",
+            "files"
+          ],
+          "properties": {
+            "family": {
+              "type": "string"
+            },
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "found": {
+              "type": "boolean"
+            }
+          }
+        },
+        "timeoutMs": 90000
       }
     }
   },

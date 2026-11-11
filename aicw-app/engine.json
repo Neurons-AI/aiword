@@ -1,12 +1,16 @@
 {
-  "repo": "https://github.com/Neurons-AI/wordcraft.git",
+  "repo": "https://github.com/Neurons-AI/aiword.git",
+  "tarball": "https://codeload.github.com/Neurons-AI/aiword/tar.gz/refs/heads/aiword",
   "branch": "aiword",
   "upstream": "https://github.com/storytold/wordcraft.git",
   "i18nRepo": "https://github.com/Neurons-AI/craft-i18n.git",
-  "checkout": "~/aicoworker/openclaw/workspace-main/projects/wordcraft",
-  "i18nCheckout": "~/aicoworker/openclaw/workspace-main/projects/craft-i18n",
+  "i18nTarball": "https://codeload.github.com/Neurons-AI/craft-i18n/tar.gz/refs/heads/main",
+  "checkout": "source/aiword",
+  "i18nCheckout": "source/craft-i18n",
+  "toolchainDir": "toolchain",
   "webApp": "apps/wordcraft-web",
   "dist": "dist/web",
   "assets": "assets/wordcraft",
-  "appMirror": "aicw-app"
+  "appMirror": "aicw-app",
+  "_paths": "checkout / i18nCheckout / toolchainDir are relative to the engine data dir: $AIWORD_DATA, else <app>/data/engine. A path starting with ~/ or / is used as is (the maintainer's own checkout)."
 }

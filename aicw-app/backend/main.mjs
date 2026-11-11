@@ -241,6 +241,80 @@ const MIME = {
 };
 
 export const commands = {
+  // ---------- Google Fonts ----------
+  // Catalog of every Google Fonts family (cached a week) and the TTF files of one family, as base64,
+  // for the engine's `font.add`. The page installs them; a document naming a Google font gets it loaded.
+  async googleFonts({ query, limit, category }, ctx) {
+    let cat = await ctx.store.get('gfonts');
+    if (!cat || Date.now() - cat.at > 7 * 86400e3) {
+      const r = await fetch('https://fonts.google.com/metadata/fonts');
+      if (!r.ok) { const e = new Error(`Google Fonts catalog: HTTP ${r.status}`); e.code = 'network_error'; throw e; }
+      const j = JSON.parse((await r.text()).replace(/^\)\]\}'\s*/, ''));
+      const items = (j.familyMetadataList || []).map((f) => ({ family: f.family, category: f.category, popularity: f.popularity,
+        subsets: f.subsets || [], styles: Object.keys(f.fonts || {}) }));
+      cat = { at: Date.now(), items };
+      await ctx.store.set('gfonts', cat); // aicw:shared — public Google Fonts catalog
+    }
+    const q = String(query || '').trim().toLowerCase();
+    let list = cat.items;
+    if (category) list = list.filter((f) => String(f.category).toLowerCase() === String(category).toLowerCase());
+    if (q) list = list.filter((f) => f.family.toLowerCase().includes(q));
+    list = list.slice().sort((a, b) => (q && a.family.toLowerCase().startsWith(q) ? -1 : 0) - (q && b.family.toLowerCase().startsWith(q) ? -1 : 0) || (a.popularity || 1e9) - (b.popularity || 1e9));
+    const n = Math.max(1, Math.min(Number(limit) || 60, 400));
+    return { total: cat.items.length, count: list.length, families: list.slice(0, n).map((f) => ({ family: f.family, category: f.category, vietnamese: f.subsets.includes('vietnamese'), styles: f.styles.length })) };
+  },
+
+  async googleFontFiles({ family }, ctx) {
+    const fam = String(family || '').trim();
+    if (!fam || fam.length > 100) { const e = new Error('family is required'); e.code = 'bad_args'; throw e; }
+    const cacheKey = 'gfont:' + fam.toLowerCase();
+    const hit = await ctx.store.get(cacheKey);
+    if (hit) return hit;
+    // Regular, Bold, Italic, Bold Italic when they exist (what a word processor needs).
+    const tries = ['ital,wght@0,400;0,700;1,400;1,700', 'wght@400;700', 'ital@0;1', ''];
+    let css = '';
+    for (const t of tries) {
+      const url = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fam).replace(/%20/g, '+')}${t ? ':' + t : ''}`;
+      // An old user agent gets plain TTF files (the engine reads TTF/OTF/WOFF/WOFF2; TTF is the safest).
+      const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/4.0' }, signal: AbortSignal.timeout(15000) });
+      if (r.ok) { css = await r.text(); break; }
+    }
+    // Not a Google font (Aptos, Calibri, …): an expected answer, not an error.
+    if (!css) { const miss = { family: fam, found: false, files: [] }; await ctx.store.set(cacheKey, miss); return miss; } // aicw:shared — public font files cache
+    const urls = [...new Set([...css.matchAll(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)/g)].map((m) => m[1]))].slice(0, 8);
+    // In parallel, each with its own 20 s limit: one slow file must not sink the family.
+    const got = await Promise.all(urls.map(async (u, i) => {
+      try {
+        const r = await fetch(u, { signal: AbortSignal.timeout(20000) });
+        if (!r.ok) return null;
+        const ext = (/\.(ttf|otf|woff2?)(\?|$)/.exec(u) || [, 'ttf'])[1];
+        return { name: `${fam.replace(/\W+/g, '')}-${i}.${ext}`, data: Buffer.from(await r.arrayBuffer()).toString('base64') };
+      } catch { return null; }
+    }));
+    const files = got.filter(Boolean);
+    if (!files.length) { const e = new Error(`could not download "${fam}"`); e.code = 'network_error'; throw e; }
+    const out = { family: fam, found: true, files };
+    const bytes = files.reduce((n, f) => n + f.data.length, 0);
+    if (bytes < 6e6) await ctx.store.set(cacheKey, out); // aicw:shared — public font files cache
+    return out;
+  },
+
+  // An engine crash (Rust panic / WASM trap) reported by the page: hand it to the agent at once, no click.
+  // Same message within 6 h = already being repaired; the page just shows "AI is fixing it".
+  async reportEngineBug(bug, ctx) {
+    const msg = String(bug && bug.message || '').slice(0, 3000);
+    if (!msg) { const e = new Error('message is required'); e.code = 'bad_args'; throw e; }
+    const key = 'engineBug:' + msg.split('\n')[0].replace(/\d+/g, '#').slice(0, 160);
+    const seen = await ctx.store.user.get(key);
+    if (seen && Date.now() - seen.at < 6 * 3600e3) return { sent: false, already: true, since: seen.at };
+    await ctx.store.user.set(key, { at: Date.now(), build: bug.build });
+    const text = `[ai-word engine-bug] ${bug.kind || 'error'} in build ${bug.build || '?'}: ${msg.split('\n')[0].slice(0, 200)}\n` +
+      'Follow skill ai-word SKILL.md › "Engine repair" from step 1. Ask the owner ONE yes/no question before installing tools or shipping.\n' +
+      '```json\n' + JSON.stringify({ app: 'ai-word', kind: bug.kind, build: bug.build, at: bug.at, message: msg, stack: String(bug.stack || '').slice(0, 3000), recentCommands: (bug.recent || []).slice(-12) }, null, 1) + '\n```';
+    await ctx.agent.send(text);
+    return { sent: true };
+  },
+
   // ✨ AI pane: one model call, JSON out (reply + editor commands). No agent round-trip.
   async assist({ prompt }, ctx) {
     if (typeof prompt !== 'string' || !prompt.trim()) throw Object.assign(new Error('Thiếu yêu cầu.'), { code: 'bad_args' });

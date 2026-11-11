@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-// AI Word engine tool: the editor is the Rust app WordCraft (fork Neurons-AI/wordcraft, branch
-// aiword) compiled to WebAssembly. This script is how an agent (or a person) repairs and ships it.
+// AI Word engine tool: the editor is the Rust app WordCraft (public fork Neurons-AI/aiword, branch
+// aiword) compiled to WebAssembly. This script is how an agent repairs and ships it — on ANY machine
+// the app is installed on (a Store buyer too): it installs its own Rust tools and fetches the source.
 //
-//   node scripts/engine.mjs status            where things are, what build is shipped, git state
-//   node scripts/engine.mjs ensure            clone the fork + translations if missing
+//   node scripts/engine.mjs status            where things are, what build is shipped, what is missing
+//   node scripts/engine.mjs toolchain         install Rust + wasm32 + trunk into the app's data dir (once, ~1 GB, 3–10 min)
+//   node scripts/engine.mjs ensure            fetch the engine source + translations if missing (git, else a tarball)
 //   node scripts/engine.mjs check             cargo check of the web build (fast, catches compile errors)
 //   node scripts/engine.mjs build [--bg]      trunk release build → .engine-staging/<hash>  (5–10 min)
 //   node scripts/engine.mjs build-status      result of the last build (for --bg)
@@ -21,9 +23,22 @@ import { fileURLToPath } from 'node:url';
 
 const APP = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cfg = JSON.parse(fs.readFileSync(path.join(APP, 'engine.json'), 'utf8'));
-const home = (p) => p.replace(/^~(?=\/|$)/, os.homedir());
-const SRC = home(cfg.checkout);
-const I18N = home(cfg.i18nCheckout);
+// The maintainer's machine may point at its own checkout (engine.local.json, never packed).
+try { Object.assign(cfg, JSON.parse(fs.readFileSync(path.join(APP, 'engine.local.json'), 'utf8'))); } catch {}
+const DATA = process.env.AIWORD_DATA || path.join(APP, 'data', 'engine');
+const where = (p) => (/^~(\/|$)/.test(p) ? p.replace(/^~/, os.homedir()) : path.isAbsolute(p) ? p : path.join(DATA, p));
+const SRC = where(cfg.checkout);
+const I18N = where(cfg.i18nCheckout);
+const TOOLS = where(cfg.toolchainDir || 'toolchain');
+const RUSTUP_HOME = path.join(TOOLS, 'rustup');
+const CARGO_HOME = path.join(TOOLS, 'cargo');
+const WIN = process.platform === 'win32';
+const EXE = WIN ? '.exe' : '';
+const localBin = path.join(CARGO_HOME, 'bin');
+// Our own tools come first; a machine that already has Rust still works (system PATH after ours).
+const ENV = { ...process.env, RUSTUP_HOME: fs.existsSync(RUSTUP_HOME) ? RUSTUP_HOME : (process.env.RUSTUP_HOME || ''), CARGO_HOME: fs.existsSync(CARGO_HOME) ? CARGO_HOME : (process.env.CARGO_HOME || ''),
+  PATH: [localBin, path.join(TOOLS, 'bin'), process.env.PATH || ''].join(path.delimiter) };
+for (const k of ['RUSTUP_HOME', 'CARGO_HOME']) if (!ENV[k]) delete ENV[k];
 const WEB = path.join(SRC, cfg.webApp);
 const DIST = path.join(SRC, cfg.dist);
 const ASSETS = path.join(APP, cfg.assets);
@@ -34,7 +49,7 @@ const PAGE = path.join(APP, 'assets', 'app.html');
 
 const out = (o) => { console.log(JSON.stringify(o)); process.exit(o.ok ? 0 : 1); };
 const sh = (cmd, args, opts = {}) => {
-  const r = spawnSync(cmd, args, { encoding: 'utf8', maxBuffer: 64 << 20, ...opts });
+  const r = spawnSync(cmd, args, { encoding: 'utf8', maxBuffer: 64 << 20, ...opts, env: { ...ENV, ...(opts.env || {}) }, shell: WIN && !/\.exe$/i.test(cmd) && cmd !== 'git' });
   return { code: r.status ?? 1, out: (r.stdout || '') + (r.stderr || ''), error: r.error && String(r.error) };
 };
 const git = (...a) => sh('git', ['-C', SRC, ...a]);
@@ -44,37 +59,106 @@ const wasmHash = (dir) => { try { const f = fs.readdirSync(dir).find((n) => /_bg
 const shippedBuild = () => (/const BUILD = '([a-f0-9]+)'/.exec(fs.readFileSync(PAGE, 'utf8')) || [])[1] || null;
 const tail = (s, n = 4000) => (s.length > n ? s.slice(-n) : s);
 const copyDir = (a, b) => { fs.rmSync(b, { recursive: true, force: true }); fs.cpSync(a, b, { recursive: true }); };
+const cmpVer = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0); return 0; };
+async function download(url, file) {
+  const res = await fetch(url, { redirect: 'follow' });
+  if (!res.ok) out({ ok: false, error: `download failed ${res.status}`, url });
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, Buffer.from(await res.arrayBuffer()));
+}
 
 const cmds = {
   status() {
     const exists = fs.existsSync(path.join(SRC, '.git'));
+    const srcOk = exists || fs.existsSync(path.join(SRC, 'Cargo.toml'));
     const st = exists ? git('status', '--porcelain').out.trim().split('\n').filter(Boolean) : [];
     out({
-      ok: true, app: APP, source: SRC, sourceExists: exists, branch: exists ? git('rev-parse', '--abbrev-ref', 'HEAD').out.trim() : null,
+      ok: true, app: APP, source: SRC, sourceExists: srcOk, git: exists, branch: exists ? git('rev-parse', '--abbrev-ref', 'HEAD').out.trim() : null,
       head: exists ? git('rev-parse', '--short', 'HEAD').out.trim() : null, uncommitted: st.slice(0, 30),
       shippedBuild: shippedBuild(), assetsBuild: wasmHash(ASSETS), staged: fs.existsSync(STAGING) ? fs.readdirSync(STAGING) : [],
       backups: fs.existsSync(BACKUPS) ? fs.readdirSync(BACKUPS).sort().slice(-5) : [], lastBuild: readState().build || null,
+      data: DATA, canPush: exists && git('push', '--dry-run', '-q', 'origin', cfg.branch).code === 0, missing: [!exists && !fs.existsSync(path.join(SRC, 'Cargo.toml')) && 'source (engine.mjs ensure)', sh('cargo', ['--version']).code && 'rust (engine.mjs toolchain)', sh('trunk', ['--version']).code && 'trunk (engine.mjs toolchain)'].filter(Boolean),
       tools: { cargo: sh('cargo', ['--version']).code === 0, trunk: sh('trunk', ['--version']).code === 0, wasmTarget: /wasm32-unknown-unknown/.test(sh('rustup', ['target', 'list', '--installed']).out) },
     });
   },
 
-  ensure() {
-    if (!fs.existsSync(path.join(SRC, '.git'))) {
-      const r = sh('git', ['clone', '--branch', cfg.branch, cfg.repo, SRC]);
-      if (r.code) out({ ok: false, error: 'clone failed', detail: tail(r.out, 1500) });
-      git('remote', 'add', 'upstream', cfg.upstream);
+  async toolchain() {
+    // Installs what the build needs, inside the app's data dir (nothing system-wide, no admin rights):
+    // rustup (minimal profile) + the toolchain from Cargo.toml's rust-version or newer + wasm32 target + trunk.
+    fs.mkdirSync(TOOLS, { recursive: true });
+    const have = (c, a) => sh(c, a).code === 0;
+    const steps = [];
+    if (!(have('cargo', ['--version']) && have('rustup', ['--version']))) {
+      const triple = { 'darwin-arm64': 'aarch64-apple-darwin', 'darwin-x64': 'x86_64-apple-darwin', 'linux-x64': 'x86_64-unknown-linux-gnu', 'linux-arm64': 'aarch64-unknown-linux-gnu',
+        'win32-x64': 'x86_64-pc-windows-msvc', 'win32-arm64': 'aarch64-pc-windows-msvc' }[`${process.platform}-${process.arch}`];
+      if (!triple) out({ ok: false, error: `no Rust installer for ${process.platform}-${process.arch}` });
+      const init = path.join(TOOLS, `rustup-init${EXE}`);
+      await download(`https://static.rust-lang.org/rustup/dist/${triple}/rustup-init${EXE}`, init);
+      if (!WIN) fs.chmodSync(init, 0o755);
+      // wasm32 builds link with rust-lld, so Windows needs no Visual Studio: the gnu host avoids its linker check.
+      const host = WIN ? triple.replace('msvc', 'gnu') : triple;
+      const r = sh(init, ['-y', '--no-modify-path', '--profile', 'minimal', '--default-toolchain', 'stable', '--default-host', host, '--target', 'wasm32-unknown-unknown'],
+        { env: { RUSTUP_HOME, CARGO_HOME, RUSTUP_INIT_SKIP_PATH_CHECK: 'yes' } });
+      if (r.code) out({ ok: false, error: 'Rust install failed', detail: tail(r.out, 2000) });
+      ENV.RUSTUP_HOME = RUSTUP_HOME; ENV.CARGO_HOME = CARGO_HOME;
+      steps.push('rust');
     }
-    if (!fs.existsSync(path.join(I18N, '.git'))) {
-      const r = sh('git', ['clone', cfg.i18nRepo, I18N]);
-      if (r.code) out({ ok: false, error: 'i18n clone failed', detail: tail(r.out, 1500) });
+    if (!/wasm32-unknown-unknown/.test(sh('rustup', ['target', 'list', '--installed']).out)) {
+      const r = sh('rustup', ['target', 'add', 'wasm32-unknown-unknown']);
+      if (r.code) out({ ok: false, error: 'could not add the wasm32 target', detail: tail(r.out, 1500) });
+      steps.push('wasm32');
     }
-    const br = git('rev-parse', '--abbrev-ref', 'HEAD').out.trim();
-    if (br !== cfg.branch) out({ ok: false, error: `source is on branch ${br}, expected ${cfg.branch}`, fix: `git -C ${SRC} checkout ${cfg.branch}` });
-    out({ ok: true, source: SRC, i18n: I18N, branch: br });
+    const need = (/rust-version\s*=\s*"([\d.]+)"/.exec(fs.existsSync(path.join(SRC, 'Cargo.toml')) ? fs.readFileSync(path.join(SRC, 'Cargo.toml'), 'utf8') : '') || [])[1];
+    const cur = (/rustc (\d+\.\d+)/.exec(sh('rustc', ['--version']).out) || [])[1];
+    if (need && cur && cmpVer(cur, need) < 0) { const r = sh('rustup', ['update', 'stable']); if (r.code) out({ ok: false, error: `Rust ${cur} is older than ${need} and could not update`, detail: tail(r.out, 1500) }); steps.push('rust-update'); }
+    if (!have('trunk', ['--version'])) {
+      const v = cfg.trunkVersion || '0.22.1';
+      const t = { 'darwin-arm64': 'aarch64-apple-darwin.tar.gz', 'darwin-x64': 'x86_64-apple-darwin.tar.gz', 'linux-x64': 'x86_64-unknown-linux-gnu.tar.gz', 'linux-arm64': 'aarch64-unknown-linux-gnu.tar.gz',
+        'win32-x64': 'x86_64-pc-windows-msvc.zip', 'win32-arm64': 'x86_64-pc-windows-msvc.zip' }[`${process.platform}-${process.arch}`];
+      const bin = path.join(TOOLS, 'bin'); fs.mkdirSync(bin, { recursive: true });
+      const arc = path.join(TOOLS, `trunk-${t}`);
+      await download(`https://github.com/trunk-rs/trunk/releases/download/v${v}/trunk-${t}`, arc);
+      // tar reads .tar.gz everywhere and .zip on Windows 10+ (bsdtar).
+      const r = sh('tar', ['-xf', arc, '-C', bin]);
+      if (r.code) out({ ok: false, error: 'could not unpack trunk', detail: tail(r.out, 1000) });
+      if (!WIN) fs.chmodSync(path.join(bin, 'trunk'), 0o755);
+      fs.rmSync(arc, { force: true });
+      steps.push('trunk');
+    }
+    const v = { rustc: sh('rustc', ['--version']).out.trim(), trunk: sh('trunk', ['--version']).out.trim() };
+    out({ ok: !!v.rustc && !!v.trunk, installed: steps, ...v, dir: TOOLS });
+  },
+
+  async ensure() {
+    // git when present (keeps history: push works for the maintainer); otherwise a tarball, no git needed.
+    const hasGit = sh('git', ['--version']).code === 0;
+    const fetchSrc = async (repo, branch, tarball, dest, label) => {
+      if (fs.existsSync(path.join(dest, 'Cargo.toml')) || fs.existsSync(path.join(dest, 'locales'))) return 'present';
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      if (hasGit) {
+        const r = sh('git', ['clone', '--depth', '1', '--branch', branch, repo, dest]);
+        if (!r.code) return 'git';
+      }
+      fs.rmSync(dest, { recursive: true, force: true }); fs.mkdirSync(dest, { recursive: true });
+      const arc = dest + '.tar.gz';
+      await download(tarball, arc);
+      const r = sh('tar', ['-xzf', arc, '-C', dest, '--strip-components', '1']);
+      fs.rmSync(arc, { force: true });
+      if (r.code) out({ ok: false, error: `${label}: could not unpack the source`, detail: tail(r.out, 1500) });
+      return 'tarball';
+    };
+    const a = await fetchSrc(cfg.repo, cfg.branch, cfg.tarball, SRC, 'engine');
+    const b = await fetchSrc(cfg.i18nRepo, 'main', cfg.i18nTarball, I18N, 'translations');
+    if (fs.existsSync(path.join(SRC, '.git'))) {
+      if (!/upstream/.test(git('remote').out)) git('remote', 'add', 'upstream', cfg.upstream);
+      const br = git('rev-parse', '--abbrev-ref', 'HEAD').out.trim();
+      if (br !== cfg.branch) out({ ok: false, error: `source is on branch ${br}, expected ${cfg.branch}`, fix: `git -C ${SRC} checkout ${cfg.branch}` });
+    }
+    out({ ok: true, source: SRC, i18n: I18N, engine: a, translations: b, data: DATA });
   },
 
   check() {
-    const r = sh('cargo', ['check', '-p', 'wordcraft-web', '--target', 'wasm32-unknown-unknown', '--message-format', 'short'], { cwd: SRC, env: { ...process.env, CRAFT_I18N_DIR: I18N } });
+    const r = sh('cargo', ['check', '-p', 'wordcraft-web', '--target', 'wasm32-unknown-unknown', '--message-format', 'short'], { cwd: SRC, env: { CRAFT_I18N_DIR: I18N } });
     const errors = r.out.split('\n').filter((l) => /\berror(\[E\d+\])?:/.test(l)).slice(0, 40);
     out({ ok: r.code === 0, errors, tail: r.code ? tail(r.out, 3000) : undefined });
   },
@@ -90,7 +174,7 @@ const cmds = {
     }
     const t0 = Date.now();
     writeState({ build: { state: 'running', pid: process.pid, startedAt: new Date().toISOString() } });
-    const r = sh('trunk', ['build', '--release'], { cwd: WEB, env: { ...process.env, CRAFT_I18N_DIR: I18N } });
+    const r = sh('trunk', ['build', '--release'], { cwd: WEB, env: { CRAFT_I18N_DIR: I18N } });
     if (r.code) {
       const errors = r.out.split('\n').filter((l) => /\berror(\[E\d+\])?[:\s]/.test(l)).slice(0, 40);
       writeState({ build: { state: 'failed', at: new Date().toISOString(), errors, tail: tail(r.out, 3000) } });
@@ -190,4 +274,4 @@ const cmds = {
 
 const name = process.argv[2];
 if (!cmds[name]) out({ ok: false, error: `unknown command ${name || ''}`, commands: Object.keys(cmds) });
-cmds[name]();
+await cmds[name]();
