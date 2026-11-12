@@ -260,7 +260,7 @@ export const commands = {
     if (category) list = list.filter((f) => String(f.category).toLowerCase() === String(category).toLowerCase());
     if (q) list = list.filter((f) => f.family.toLowerCase().includes(q));
     list = list.slice().sort((a, b) => (q && a.family.toLowerCase().startsWith(q) ? -1 : 0) - (q && b.family.toLowerCase().startsWith(q) ? -1 : 0) || (a.popularity || 1e9) - (b.popularity || 1e9));
-    const n = Math.max(1, Math.min(Number(limit) || 60, 400));
+    const n = Math.max(1, Math.min(Number(limit) || 60, 3000));
     return { total: cat.items.length, count: list.length, families: list.slice(0, n).map((f) => ({ family: f.family, category: f.category, vietnamese: f.subsets.includes('vietnamese'), styles: f.styles.length })) };
   },
 

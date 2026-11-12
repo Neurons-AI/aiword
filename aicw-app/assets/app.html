@@ -2,10 +2,10 @@
   .aw-bug{position:absolute;left:50%;top:8px;transform:translateX(-50%);z-index:20;display:flex;align-items:center;gap:8px;max-width:min(92%,720px);padding:8px 10px;border-radius:10px;background:#7f1d1d;color:#fff;font:13px system-ui,sans-serif;box-shadow:0 6px 20px #0006}
   .aw-bug span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .aw-bug[hidden]{display:none}
-  .aw-root{position:fixed;inset:0;display:flex;overflow:hidden;background:#e6e6e6;
-    --aw-bg:#ffffff;--aw-fg:#1f1f1f;--aw-muted:#f2f2f2;--aw-border:#d6d6d6;--aw-sub:#616161;--aw-accent:#185abd;--aw-err-bg:#fde8e8;--aw-err-fg:#9b1c1c}
-  html[data-theme="dark"] .aw-root{background:#1f1f1f;
-    --aw-bg:#252526;--aw-fg:#e8e8e8;--aw-muted:#333336;--aw-border:#3c3c3c;--aw-sub:#b0b0b0;--aw-accent:#4f8ff7;--aw-err-bg:#4a1f1f;--aw-err-fg:#ffb4b4}
+  /* Colours live on html so every part (also the font panel and buttons outside .aw-root) gets them. */
+  html{--aw-bg:#ffffff;--aw-fg:#1f1f1f;--aw-muted:#f2f2f2;--aw-border:#d6d6d6;--aw-sub:#616161;--aw-accent:#185abd;--aw-err-bg:#fde8e8;--aw-err-fg:#9b1c1c;--aw-hover:#e8eef9;--aw-canvas:#e6e6e6}
+  html[data-theme="dark"]{--aw-bg:#252526;--aw-fg:#e8e8e8;--aw-muted:#333336;--aw-border:#3c3c3c;--aw-sub:#b0b0b0;--aw-accent:#4f8ff7;--aw-err-bg:#4a1f1f;--aw-err-fg:#ffb4b4;--aw-hover:#2f3a4d;--aw-canvas:#1f1f1f}
+  .aw-root{position:fixed;inset:0;display:flex;overflow:hidden;background:var(--aw-canvas)}
   .aw-doc{flex:1;min-width:0;position:relative}
   .aw-doc iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
   .aw-load{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--aw-sub);font:14px system-ui,sans-serif;pointer-events:none}
@@ -38,15 +38,17 @@
   .aw-gf header span{flex:1}
   .aw-gf header button{background:none;border:0;color:inherit;cursor:pointer;font-size:14px}
   .aw-gf .gf-bar{display:flex;gap:6px;padding:8px 10px}
-  .aw-gf input,.aw-gf select{flex:1;min-width:0;padding:5px 7px;border:1px solid var(--aw-border);border-radius:6px;background:transparent;color:inherit;font:inherit}
+  .aw-gf input,.aw-gf select{flex:1;min-width:0;padding:5px 7px;border:1px solid var(--aw-border);border-radius:6px;background:var(--aw-bg);color:var(--aw-fg);font:inherit}
+  .aw-gf input::placeholder{color:var(--aw-sub)}
+  .aw-gf label{display:flex;align-items:center;gap:4px;color:var(--aw-fg);white-space:nowrap}
   .aw-gf select{flex:0 0 auto}
   .aw-gf .gf-list{flex:1;overflow:auto;padding:0 6px 8px}
   .aw-gf .gf-item{display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border:0;border-radius:6px;background:none;color:inherit;text-align:left;cursor:pointer}
-  .aw-gf .gf-item:hover{background:var(--aw-hover,#8882)}
+  .aw-gf .gf-item:hover{background:var(--aw-hover)}
   .aw-gf .gf-item b{flex:1;font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .aw-gf .gf-item small{opacity:.6}
+  .aw-gf .gf-item small{color:var(--aw-sub)}
   .aw-gf .gf-item .ok{color:#2e7d32}
-  .aw-gf .gf-note{padding:4px 10px 8px;opacity:.7;font-size:12px}
+  .aw-gf .gf-note{padding:4px 10px 8px;color:var(--aw-sub);font-size:12px}
   .aw-gfab{position:fixed;right:84px;bottom:34px;z-index:5;border-radius:20px;padding:6px 12px;border:1px solid var(--aw-border);background:var(--aw-bg);color:var(--aw-fg);font:600 12px system-ui;cursor:pointer;box-shadow:0 2px 8px #0002}
   .aw-gfab.hide{display:none}
 </style>
@@ -62,7 +64,7 @@
   </aside>
 </div>
 <button class="aw-fab" id="fab">✨ AI</button>
-<button class="aw-gfab" id="gfab" title="Google Fonts">Aa Fonts</button>
+<button class="aw-gfab" id="gfab" title="Google Fonts" hidden style="display:none">Aa Fonts</button>
 <div class="aw-gf" id="gf" hidden>
   <header><span id="gfTitle">Google Fonts</span><button id="gfX">✕</button></header>
   <div class="gf-bar"><input id="gfQ" type="search" autocomplete="off"><select id="gfCat"><option value="">*</option><option>Sans Serif</option><option>Serif</option><option>Display</option><option>Handwriting</option><option>Monospace</option></select></div>
@@ -126,7 +128,7 @@
   }
 
   // ---------- WordCraft frame ----------
-  const BUILD = 'b6dd941886f5567f';
+  const BUILD = '9617b91ee7398eb7';
   const base = (window.AIWORD_ASSETS || '') + 'wordcraft/index.html';
   frame.src = base + '?lang=' + encodeURIComponent(wcLang()) + '&v=' + BUILD; // BUILD = wasm hash: a new engine build never comes from cache
   // WordCraft runs in a frame on another origin: talk to window.wordcraft over postMessage.
@@ -235,7 +237,21 @@
     for (const fam of want) { triedMissing.add(fam.toLowerCase()); try { if (await installGoogleFont(fam)) got.push(fam); } catch {} }
     if (got.length) console.info(tr('gfAuto'), got.join(', '));  // font.add re-lays out the document itself
   }
-  setInterval(autoLoadMissing, 4000);
+  setInterval(autoLoadMissing, 1500);
+  // Google Fonts live inside the engine's own Font box (Home › Font, mini toolbar, Font dialog):
+  // the catalog is handed to it once; picking a family not on this machine applies it and the
+  // missing-font check above downloads it a moment later.
+  let catalogSent = false;
+  async function sendCatalog() {
+    if (catalogSent || !ready) return;
+    try {
+      const r = await aicw.call('googleFonts', { query: '', category: '', limit: 3000 });
+      const names = (r.families || []).map((f) => f.family || f).filter(Boolean);
+      const res = await api.execute('ui.fontCatalog', { names });
+      catalogSent = !!(res && res.count >= 0);
+    } catch (e) { console.warn('font catalog', e && e.message); }
+  }
+  setInterval(sendCatalog, 2000);
   gfLocalize();
   window.AIWordFonts = { installGoogleFont, autoLoadMissing };
 
