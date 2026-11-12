@@ -377,30 +377,61 @@ struct ComboSearch {
 /// The warning mark at the right end of the field `resp` when its font `current` isn't installed
 /// and is drawn in `shown_as`, with its note as the field's description (the note is a hover
 /// hint: a screen reader reads it here). Returns the note, for the field's hover.
-fn missing_font_mark(ui: &Ui, resp: &egui::Response, current: &str, shown_as: Option<&str>, t: &Tokens) -> Vec<String> {
-    let Some(shown) = shown_as else { return Vec::new() };
+/// A free Google font drawn to the same measurements, for the usual Microsoft fonts that Google
+/// doesn't host (Aptos, Calibri, …): picking it keeps the text's look and line breaks close.
+fn similar_google_font(font: &str) -> &'static str {
+    match font.to_lowercase().as_str() {
+        "calibri" | "calibri light" => "Carlito",
+        "cambria" => "Caladea",
+        "arial" | "helvetica" => "Arimo",
+        "times new roman" | "times" => "Tinos",
+        "courier new" | "courier" => "Cousine",
+        "aptos" | "aptos display" | "segoe ui" | "verdana" | "tahoma" => "Inter",
+        "georgia" | "garamond" => "Noto Serif",
+        _ => "Noto Sans",
+    }
+}
+
+/// What a click on the warning mark asked for.
+struct MarkOut {
+    notes: Vec<String>,
+    /// A family to apply (a similar Google font) or [`ADD_FONT`].
+    picked: Option<String>,
+    /// The pointer pressed the mark this frame (the field must not treat it as its own click).
+    hit: bool,
+}
+
+fn missing_font_mark(ui: &Ui, resp: &egui::Response, current: &str, shown_as: Option<&str>, t: &Tokens) -> MarkOut {
+    let mut out = MarkOut { notes: Vec::new(), picked: None, hit: false };
+    let Some(shown) = shown_as else { return out };
     let r = Rect::from_center_size(pos2(resp.rect.right() - 9.0, resp.rect.center().y), vec2(12.0, 12.0));
-    // AI Word: a font Google has is one click away: the mark is a button that downloads it.
+    // AI Word: the mark is a button. A font Google has downloads on a click; any other font opens a
+    // small card saying why and offering a similar free font or Add Font….
     let fetchable = in_font_catalog(current);
     let state = font_fetch_state(current);
     let busy = state == "downloading";
+    let card_id = resp.id.with("fontMarkCard");
     // The text field under the mark wins egui's hit test (it senses drags), so the mark reads the
-    // pointer itself: hover → hand cursor + highlight, a press on it → download (not field focus).
-    let over = fetchable && ui.input(|i| i.pointer.hover_pos()).is_some_and(|p| r.expand(3.0).contains(p));
+    // pointer itself.
+    let over = ui.input(|i| i.pointer.hover_pos()).is_some_and(|p| r.expand(4.0).contains(p));
     let pressed = over && ui.input(|i| i.pointer.primary_pressed());
     if over {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-        ui.painter().rect_filled(r.expand(2.0), 3.0, t.hover);
+        ui.painter().rect_filled(r.expand(3.0), 3.0, t.hover);
     }
     if pressed {
-        // Keep the press from putting the caret in the field.
+        out.hit = true;
         ui.memory_mut(|m| m.surrender_focus(resp.id));
-        if !busy {
-            request_font_fetch(current);
+        if fetchable {
+            if !busy {
+                request_font_fetch(current);
+            }
+        } else {
+            let open = ui.data(|d| d.get_temp::<bool>(card_id)).unwrap_or(false);
+            ui.data_mut(|d| d.insert_temp(card_id, !open));
         }
     }
     if busy {
-        // A small spinning arc while it downloads.
         let a = ui.input(|i| i.time) as f32 * 6.0;
         let pts: Vec<egui::Pos2> = (0..=12).map(|k| { let th = a + k as f32 * 0.4; pos2(r.center().x + 5.0 * th.cos(), r.center().y + 5.0 * th.sin()) }).collect();
         ui.painter().add(egui::Shape::line(pts, egui::Stroke::new(1.5, t.accent)));
@@ -408,21 +439,49 @@ fn missing_font_mark(ui: &Ui, resp: &egui::Response, current: &str, shown_as: Op
     } else {
         icons::paint(ui.painter(), r, "fontMissing", t.icon, t.accent);
     }
-    let mut note = missing_font_tip(current, shown);
-    if fetchable {
-        note = if busy {
+    let note = if fetchable {
+        if busy {
             crate::i18n::fmt(tl!("Downloading {font} from Google Fonts…"), &[("font", current)])
         } else if let Some(why) = state.strip_prefix("failed: ") {
-            crate::i18n::fmt(tl!("Couldn't download {font} ({why}). Click the mark to try again."), &[("font", current), ("why", why)])
+            crate::i18n::fmt(tl!("Couldn't download {font} ({why}). Click to try again."), &[("font", current), ("why", why)])
         } else {
-            crate::i18n::fmt(tl!("{font} isn't on this computer yet. Click the mark to download it from Google Fonts."), &[("font", current)])
-        };
-        if over {
-            egui::Tooltip::always_open(ui.ctx().clone(), ui.layer_id(), resp.id.with("fontFetchTip"), egui::PopupAnchor::Pointer).show(|ui| ui.label(note.as_str()));
+            crate::i18n::fmt(tl!("{font} isn't on this computer yet. Click to download it from Google Fonts."), &[("font", current)])
+        }
+    } else {
+        crate::i18n::fmt(tl!("{font} isn't installed and isn't a free Google font, so the text is shown in {shown}. Click for options."), &[("font", current), ("shown", shown)])
+    };
+    let card_open = !fetchable && ui.data(|d| d.get_temp::<bool>(card_id)).unwrap_or(false);
+    if over && !card_open {
+        egui::Tooltip::always_open(ui.ctx().clone(), ui.layer_id(), resp.id.with("fontMarkTip"), egui::PopupAnchor::Pointer).show(|ui| {
+            ui.set_max_width(280.0);
+            ui.label(note.as_str());
+        });
+    }
+    if card_open {
+        let similar = similar_google_font(current);
+        let area = egui::Area::new(card_id.with("area")).order(egui::Order::Tooltip).fixed_pos(pos2(resp.rect.left(), resp.rect.bottom() + 2.0));
+        let shown_card = area.show(ui.ctx(), |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                ui.set_max_width(300.0);
+                ui.label(egui::RichText::new(crate::i18n::fmt(tl!("{font} isn't on this computer"), &[("font", current)])).strong());
+                ui.label(crate::i18n::fmt(tl!("It's a Microsoft font that Google Fonts doesn't have, so the text is shown in {shown}."), &[("shown", shown)]));
+                ui.add_space(4.0);
+                if ui.button(crate::i18n::fmt(tl!("Use {similar} instead (free, similar look)"), &[("similar", similar)])).clicked() {
+                    out.picked = Some(similar.to_string());
+                }
+                if ui.button(tl!("Add Font… (I have the font file)")).clicked() {
+                    out.picked = Some(ADD_FONT.to_string());
+                }
+            });
+        });
+        let outside = ui.input(|i| i.pointer.primary_pressed()) && !pressed && !ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| shown_card.response.rect.contains(p));
+        if out.picked.is_some() || outside || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+            ui.data_mut(|d| d.insert_temp(card_id, false));
         }
     }
     ui.ctx().accesskit_node_builder(resp.id, |n| n.set_description(note.as_str()));
-    vec![note]
+    out.notes = vec![note];
+    out
 }
 
 /// Draws an editable or searchable combo box: keeps temporary text and search state, supports
@@ -481,10 +540,17 @@ fn combo_impl(ui: &mut Ui, options: ComboOptions<'_>) -> Option<String> {
         if !tip.is_empty() {
             resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::TextInput, ui.is_enabled(), tip));
         }
-        let notes = missing_font_mark(ui, &resp, current, mark, &t);
+        let mark_out = missing_font_mark(ui, &resp, current, mark, &t);
+        let notes = mark_out.notes;
+        if let Some(p) = mark_out.picked {
+            out = Some(p);
+        }
         // AI Word: one font menu. A click in the font box, or typing in it, opens the menu with
         // its search box (what was typed carried over) instead of the old inline match list.
-        let open_menu = search && (resp.clicked() || resp.changed());
+        // A click on the warning mark (press and release land on the field too) is the mark's own.
+        let on_mark = mark.is_some()
+            && ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| Rect::from_center_size(pos2(resp.rect.right() - 9.0, resp.rect.center().y), vec2(20.0, 20.0)).contains(p));
+        let open_menu = search && !mark_out.hit && !on_mark && (resp.clicked() || resp.changed());
         let carry = if search && resp.changed() { Some(text.clone()) } else { None };
         keytip_badge(ui, resp.rect, "combo", id);
         focused = resp.has_focus();
@@ -561,6 +627,7 @@ fn combo_impl(ui: &mut Ui, options: ComboOptions<'_>) -> Option<String> {
         let close = if search { egui::PopupCloseBehavior::CloseOnClickOutside } else { egui::PopupCloseBehavior::CloseOnClick };
         let mut menu_field = aresp.clone();
         menu_field.rect = resp.rect.union(ar);
+        menu_field.interact_rect = menu_field.rect;
         let menu = craft_ui::combo::Menu::new(ui, &menu_field).close_behavior(close).height(if search { 560.0 } else { 420.0 });
         let row_h = if preview.is_some() { COMBO_PREVIEW_ROW_H } else { ui.spacing().interact_size.y };
         // The recent section keeps its order while the list stays open: a pick moves the family to
