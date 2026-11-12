@@ -775,7 +775,30 @@ impl WordApp {
                 let names: Vec<String> = p.get("names").and_then(Value::as_array).map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()).unwrap_or_default();
                 let n = names.len();
                 crate::widgets::set_font_catalog(names);
+                // Optional `meta`: [{family, category, vi}] for the menu's chips and Vietnamese switch.
+                if let Some(meta) = p.get("meta").and_then(Value::as_array) {
+                    let m = meta
+                        .iter()
+                        .filter_map(|e| {
+                            let fam = e.get("family")?.as_str()?.to_lowercase();
+                            let cat = e.get("category").and_then(Value::as_str).unwrap_or("").to_string();
+                            let vi = e.get("vi").and_then(Value::as_bool).unwrap_or(false);
+                            Some((fam, (cat, vi)))
+                        })
+                        .collect();
+                    crate::widgets::set_font_meta(m);
+                }
                 json!({"count": n})
+            }
+            "ui.fontFetch" => {
+                // AI Word: the fonts the user asked to download since the last call (host polls).
+                json!({"fonts": crate::widgets::take_font_fetch()})
+            }
+            "ui.fontFetchState" => {
+                // AI Word: the host says how a download went: state "downloading", "failed: …" or "".
+                let font = s("font").unwrap_or("");
+                crate::widgets::set_font_fetch_state(font, s("state").unwrap_or(""));
+                json!({})
             }
             "ui.discord" => {
                 self.canvas.open_url = Some("https://discord.gg/artcraft".into());
@@ -1126,6 +1149,8 @@ pub(crate) fn works_without_document(id: &str) -> bool {
             | "ui.makeDefaultApp"
             | "ui.discord"
             | "ui.fontCatalog"
+            | "ui.fontFetch"
+            | "ui.fontFetchState"
             | "ui.caretAnimation"
             | "ui.startScreen"
             | "ui.recentRemove"

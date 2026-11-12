@@ -849,6 +849,22 @@ pub fn status_bar(app: &mut WordApp, ui: &mut Ui) {
                                 ui.label(crate::i18n::tn((count - SHOWN) as u64, "…and {n} more", "…and {n} more"));
                             }
                             ui.separator();
+                            // AI Word: the fonts Google has are downloaded with one click.
+                            let fetch: Vec<String> = missing.iter().filter(|f| !f.metric_compatible && crate::widgets::in_font_catalog(&f.font)).map(|f| f.font.clone()).collect();
+                            if !fetch.is_empty() {
+                                let busy = fetch.iter().any(|f| crate::widgets::font_fetch_state(f) == "downloading");
+                                let label = if busy { tl!("Downloading from Google Fonts…").to_string() } else { crate::i18n::tn(fetch.len() as u64, "Download {n} font from Google Fonts", "Download {n} fonts from Google Fonts") };
+                                if ui.add_enabled(!busy, egui::Button::new(label)).clicked() {
+                                    for f in &fetch {
+                                        crate::widgets::request_font_fetch(f);
+                                    }
+                                }
+                                for f in &fetch {
+                                    if let Some(why) = crate::widgets::font_fetch_state(f).strip_prefix("failed: ") {
+                                        ui.colored_label(egui::Color32::from_rgb(0xd1, 0x34, 0x38), format!("{f}: {why}"));
+                                    }
+                                }
+                            }
                             if ui.button(tl!("Add Font…")).clicked() {
                                 let _ = app.run("font.add", json!({}));
                                 ui.close();

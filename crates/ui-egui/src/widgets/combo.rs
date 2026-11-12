@@ -178,8 +178,84 @@ pub struct FontComboOptions<'a> {
 }
 
 static FONT_CATALOG: std::sync::RwLock<Vec<String>> = std::sync::RwLock::new(Vec::new());
+/// Per catalog family (lower-case name): its category ("Sans Serif", "Serif", …) and whether it
+/// has Vietnamese glyphs. Families not in it (installed ones) have no category.
+static FONT_META: std::sync::RwLock<Option<std::collections::HashMap<String, (String, bool)>>> = std::sync::RwLock::new(None);
+
+pub fn set_font_meta(meta: std::collections::HashMap<String, (String, bool)>) {
+    if let Ok(mut m) = FONT_META.write() {
+        *m = Some(meta);
+    }
+}
+
+/// The font menu's search box, category chips and Vietnamese switch, kept while it is open.
+#[derive(Clone, Default)]
+struct MenuFilter {
+    q: String,
+    cat: String,
+    vi: bool,
+    focused: bool,
+}
+
+/// The `items` the menu's filter keeps: name matches, then (with a category or the Vietnamese
+/// switch) only catalog families that fit.
+fn menu_filtered(f: &MenuFilter, items: &[String]) -> Vec<String> {
+    let meta = FONT_META.read().ok();
+    let meta = meta.as_ref().and_then(|m| m.as_ref());
+    font_matches(&f.q, items)
+        .into_iter()
+        .filter_map(|i| items.get(i))
+        .filter(|name| {
+            if f.cat.is_empty() && !f.vi {
+                return true;
+            }
+            match meta.and_then(|m| m.get(&name.to_lowercase())) {
+                Some((cat, vi)) => (f.cat.is_empty() || cat == &f.cat) && (!f.vi || *vi),
+                None => false,
+            }
+        })
+        .cloned()
+        .collect()
+}
 
 /// AI Word: families offered in every font box after the installed ones (`ui.fontCatalog`).
+/// AI Word: fonts the user asked to download (the warning mark or the status bar's Download
+/// button); the host takes them with `ui.fontFetch` and reports back with `ui.fontFetchState`.
+static FONT_FETCH: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+/// Fonts being downloaded now, and the last failure message per font.
+static FONT_FETCH_STATE: std::sync::Mutex<Vec<(String, String)>> = std::sync::Mutex::new(Vec::new());
+
+pub fn has_font_catalog() -> bool {
+    FONT_CATALOG.read().map(|c| !c.is_empty()).unwrap_or(false)
+}
+pub fn in_font_catalog(font: &str) -> bool {
+    let f = font.to_lowercase();
+    FONT_CATALOG.read().map(|c| c.iter().any(|n| n.to_lowercase() == f)).unwrap_or(false)
+}
+pub fn request_font_fetch(font: &str) {
+    if let Ok(mut q) = FONT_FETCH.lock() {
+        if !q.iter().any(|f| f.eq_ignore_ascii_case(font)) {
+            q.push(font.to_string());
+        }
+    }
+    set_font_fetch_state(font, "downloading");
+}
+pub fn take_font_fetch() -> Vec<String> {
+    FONT_FETCH.lock().map(|mut q| std::mem::take(&mut *q)).unwrap_or_default()
+}
+/// `state`: "downloading", "failed: <why>", or "" (done / idle).
+pub fn set_font_fetch_state(font: &str, state: &str) {
+    if let Ok(mut st) = FONT_FETCH_STATE.lock() {
+        st.retain(|(f, _)| !f.eq_ignore_ascii_case(font));
+        if !state.is_empty() {
+            st.push((font.to_string(), state.to_string()));
+        }
+    }
+}
+pub fn font_fetch_state(font: &str) -> String {
+    FONT_FETCH_STATE.lock().ok().and_then(|st| st.iter().find(|(f, _)| f.eq_ignore_ascii_case(font)).map(|(_, s)| s.clone())).unwrap_or_default()
+}
+
 pub fn set_font_catalog(names: Vec<String>) {
     if let Ok(mut c) = FONT_CATALOG.write() {
         *c = names;
@@ -304,8 +380,42 @@ struct ComboSearch {
 fn missing_font_mark(ui: &Ui, resp: &egui::Response, current: &str, shown_as: Option<&str>, t: &Tokens) -> Vec<String> {
     let Some(shown) = shown_as else { return Vec::new() };
     let r = Rect::from_center_size(pos2(resp.rect.right() - 9.0, resp.rect.center().y), vec2(12.0, 12.0));
-    icons::paint(ui.painter(), r, "fontMissing", t.icon, t.accent);
-    let note = missing_font_tip(current, shown);
+    // AI Word: a font Google has is one click away: the mark is a button that downloads it.
+    let fetchable = in_font_catalog(current);
+    let state = font_fetch_state(current);
+    let busy = state == "downloading";
+    let click = if fetchable { Some(ui.interact(r.expand(3.0), resp.id.with("fontFetch"), egui::Sense::click())) } else { None };
+    if let Some(c) = &click {
+        if c.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+            ui.painter().rect_filled(r.expand(2.0), 3.0, t.hover);
+        }
+        if c.clicked() && !busy {
+            request_font_fetch(current);
+        }
+    }
+    if busy {
+        // A small spinning arc while it downloads.
+        let a = ui.input(|i| i.time) as f32 * 6.0;
+        let pts: Vec<egui::Pos2> = (0..=12).map(|k| { let th = a + k as f32 * 0.4; pos2(r.center().x + 5.0 * th.cos(), r.center().y + 5.0 * th.sin()) }).collect();
+        ui.painter().add(egui::Shape::line(pts, egui::Stroke::new(1.5, t.accent)));
+        ui.ctx().request_repaint();
+    } else {
+        icons::paint(ui.painter(), r, "fontMissing", t.icon, t.accent);
+    }
+    let mut note = missing_font_tip(current, shown);
+    if fetchable {
+        note = if busy {
+            crate::i18n::fmt(tl!("Downloading {font} from Google Fonts…"), &[("font", current)])
+        } else if let Some(why) = state.strip_prefix("failed: ") {
+            crate::i18n::fmt(tl!("Couldn't download {font} ({why}). Click the mark to try again."), &[("font", current), ("why", why)])
+        } else {
+            crate::i18n::fmt(tl!("{font} isn't on this computer yet. Click the mark to download it from Google Fonts."), &[("font", current)])
+        };
+        if let Some(c) = click {
+            c.on_hover_text(note.as_str());
+        }
+    }
     ui.ctx().accesskit_node_builder(resp.id, |n| n.set_description(note.as_str()));
     vec![note]
 }
@@ -475,8 +585,80 @@ fn combo_impl(ui: &mut Ui, options: ComboOptions<'_>) -> Option<String> {
             }
             picked
         };
+        // AI Word: the font menu has its own search box (typing works while the list is open),
+        // category chips and a Vietnamese switch, as AI Slide's font picker does.
+        let filter_id = search_id.with("menu_filter");
+        let q_id = search_id.with("menu_q");
+        let menu_popup_id = egui::Popup::default_response_id(&menu_field);
+        if search && !egui::Popup::is_id_open(ui.ctx(), menu_popup_id) {
+            ui.data_mut(|d| d.remove::<MenuFilter>(filter_id));
+        }
+        let header = |ui: &mut Ui| -> Option<std::sync::Arc<Vec<String>>> {
+            let mut f: MenuFilter = ui.data(|d| d.get_temp(filter_id)).unwrap_or_default();
+            ui.add_space(4.0);
+            let w = ui.available_width().max(180.0);
+            let r = ui.add(
+                egui::TextEdit::singleline(&mut f.q)
+                    .id(q_id)
+                    .hint_text(if has_font_catalog() { tl!("Search fonts and Google Fonts…") } else { tl!("Search fonts…") })
+                    .desired_width(w - 4.0)
+                    .margin(egui::Margin::symmetric(6, 5)),
+            );
+            if !f.focused {
+                r.request_focus();
+                f.focused = true;
+            }
+            if has_font_catalog() {
+                ui.add_space(2.0);
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
+                    for (label, key) in [(tl!("All"), ""), (tl!("Sans"), "Sans Serif"), (tl!("Serif"), "Serif"), (tl!("Display"), "Display"), (tl!("Handwriting"), "Handwriting"), (tl!("Mono"), "Monospace")] {
+                        let on = f.cat == key;
+                        let chip = egui::Button::new(egui::RichText::new(label).size(11.0)).selected(on).corner_radius(10.0).min_size(vec2(0.0, 18.0));
+                        if ui.add(chip).clicked() {
+                            f.cat = key.to_string();
+                        }
+                    }
+                });
+                ui.checkbox(&mut f.vi, egui::RichText::new(tl!("Only fonts with Vietnamese")).size(11.0));
+            }
+            ui.separator();
+            let active = !f.q.trim().is_empty() || !f.cat.is_empty() || f.vi;
+            let out = active.then(|| std::sync::Arc::new(menu_filtered(&f, items)));
+            if r.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                if let Some(first) = out.as_ref().and_then(|v| v.first()) {
+                    ui.data_mut(|d| d.insert_temp(search_id.with("menu_enter"), first.clone()));
+                }
+            }
+            ui.data_mut(|d| d.insert_temp(filter_id, f));
+            out
+        };
+        let count = |h: &Option<std::sync::Arc<Vec<String>>>| match h {
+            Some(v) => v.len().max(1),
+            None => total,
+        };
+        let filtered_list = |ui: &mut Ui, range: std::ops::Range<usize>, h: Option<std::sync::Arc<Vec<String>>>| {
+            let Some(v) = h else { return list(ui, range, ()) };
+            if v.is_empty() {
+                ui.label(egui::RichText::new(tl!("No fonts match")).color(t.text_dim));
+                return None;
+            }
+            let row = |k: usize| v.get(k).map(Row::Item);
+            let picked = draw_rows(ui, RowDrawOptions { width, current, range, row: &row, highlight: None, preview, row_height: row_h, recent_rows: 0 });
+            if picked.is_some() {
+                ui.close();
+            }
+            picked
+        };
         let picked = if search {
-            menu.show_rows_with_header_footer(|_| (), row_h, |()| total, list, footer).map(|(v, f)| v.or(f))
+            let p = menu.show_rows_with_header_footer(header, row_h, count, filtered_list, footer).map(|(v, f)| v.or(f));
+            match ui.data_mut(|d| d.remove_temp::<String>(search_id.with("menu_enter"))) {
+                Some(first) => {
+                    egui::Popup::close_id(ui.ctx(), menu_popup_id);
+                    Some(Some(first))
+                }
+                None => p,
+            }
         } else {
             menu.show_rows_with_header(|_| (), row_h, |()| total, list)
         };
