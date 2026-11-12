@@ -228,13 +228,18 @@
   $('gfab').onclick = () => { gf.hidden = !gf.hidden; if (!gf.hidden) { gfLocalize(); gfSearch(); $('gfQ').focus(); } };
   $('gfX').onclick = () => { gf.hidden = true; };
   // Missing fonts of the open document → fetch the ones Google has (checked every few seconds; cheap).
-  const triedMissing = new Set();
+  const triedMissing = new Set(); const failCount = {};
   async function autoLoadMissing() {
     if (!ready) return;
     let m; try { m = await api.execute('font.missing', {}); } catch { return; }
     const want = (m && m.missing || []).map((x) => x.font).filter((f) => f && !triedMissing.has(f.toLowerCase())).slice(0, 4);
     const got = [];
-    for (const fam of want) { triedMissing.add(fam.toLowerCase()); try { if (await installGoogleFont(fam)) got.push(fam); } catch {} }
+    for (const fam of want) {
+      const k = fam.toLowerCase(); triedMissing.add(k);
+      // A failed download (network, server hiccup) is tried again a few times, not given up for good.
+      try { if (await installGoogleFont(fam)) got.push(fam); }
+      catch { failCount[k] = (failCount[k] || 0) + 1; if (failCount[k] < 4) setTimeout(() => triedMissing.delete(k), 15000 * failCount[k]); }
+    }
     if (got.length) console.info(tr('gfAuto'), got.join(', '));  // font.add re-lays out the document itself
   }
   setInterval(autoLoadMissing, 1500);

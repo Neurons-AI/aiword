@@ -295,7 +295,8 @@ export const commands = {
     if (!files.length) { const e = new Error(`could not download "${fam}"`); e.code = 'network_error'; throw e; }
     const out = { family: fam, found: true, files };
     const bytes = files.reduce((n, f) => n + f.data.length, 0);
-    if (bytes < 6e6) await ctx.store.set(cacheKey, out); // aicw:shared — public font files cache
+    // The app store keeps values up to 1 MB: cache small families only, and never let caching fail the call.
+    if (bytes < 900000) { try { await ctx.store.set(cacheKey, out); } catch {} } // aicw:shared — public font files cache
     return out;
   },
 
