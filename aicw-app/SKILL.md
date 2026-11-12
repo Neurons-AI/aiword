@@ -63,3 +63,5 @@ Kiểm tra máy trắng: `AIWORD_DATA=/tmp/x HOME=/tmp/x node <app>/scripts/engi
 ## Backend cho agent (không cần mở cửa sổ)
 
 - `{"action":"call","id":"app-ai-word","name":"open","args":{"fileId":"<id>","name":"x.docx"}}` → `{ html }`
+
+- Các lệnh khác (`app` `call`, id `app-ai-word`): `importText` {name,text} → HTML · `save` {format: docx|dotx|odt|html|rtf|doc|md|txt, title, html} → link tải · `recent` · `saveDraft`/`loadDraft` · `readSheet` {fileId} (.xlsx cho trộn thư) · `googleFonts` {query} · `googleFontFiles` {family}. `assist` và `reportEngineBug` là của trang, agent không gọi.

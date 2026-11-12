@@ -128,7 +128,7 @@
   }
 
   // ---------- WordCraft frame ----------
-  const BUILD = '9617b91ee7398eb7';
+  const BUILD = '3df4aca7a5d588ce';
   const base = (window.AIWORD_ASSETS || '') + 'wordcraft/index.html';
   frame.src = base + '?lang=' + encodeURIComponent(wcLang()) + '&v=' + BUILD; // BUILD = wasm hash: a new engine build never comes from cache
   // WordCraft runs in a frame on another origin: talk to window.wordcraft over postMessage.
@@ -243,6 +243,21 @@
     if (got.length) console.info(tr('gfAuto'), got.join(', '));  // font.add re-lays out the document itself
   }
   setInterval(autoLoadMissing, 1500);
+  // The user clicked the font box's warning mark / the status bar's Download button: fetch now,
+  // and tell the engine how it went (spinner while downloading, the reason when it fails).
+  async function serveFontFetch() {
+    if (!ready) return;
+    let q; try { q = await api.execute('ui.fontFetch', {}); } catch { return; }
+    for (const fam of (q && q.fonts) || []) {
+      const k = fam.toLowerCase(); installed.delete(k); triedMissing.add(k);
+      api.execute('ui.fontFetchState', { font: fam, state: 'downloading' }).catch(() => {});
+      let state = '';
+      try { if (!(await installGoogleFont(fam))) state = 'failed: not on Google Fonts'; }
+      catch (e) { state = 'failed: ' + String(e && e.message || e).slice(0, 120); }
+      api.execute('ui.fontFetchState', { font: fam, state }).catch(() => {});
+    }
+  }
+  setInterval(serveFontFetch, 700);
   // Google Fonts live inside the engine's own Font box (Home › Font, mini toolbar, Font dialog):
   // the catalog is handed to it once; picking a family not on this machine applies it and the
   // missing-font check above downloads it a moment later.
@@ -252,7 +267,8 @@
     try {
       const r = await aicw.call('googleFonts', { query: '', category: '', limit: 3000 });
       const names = (r.families || []).map((f) => f.family || f).filter(Boolean);
-      const res = await api.execute('ui.fontCatalog', { names });
+      const meta = (r.families || []).map((f) => ({ family: f.family, category: f.category, vi: !!f.vietnamese }));
+      const res = await api.execute('ui.fontCatalog', { names, meta });
       catalogSent = !!(res && res.count >= 0);
     } catch (e) { console.warn('font catalog', e && e.message); }
   }
