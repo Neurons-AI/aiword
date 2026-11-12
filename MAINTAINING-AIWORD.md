@@ -1,34 +1,29 @@
 # Neurons AI fork — engine for the AICoworker Office apps
 
-This is the Neurons AI private mirror of [storytold/wordcraft](https://github.com/storytold/wordcraft)
+This is the Neurons AI public fork of [storytold/wordcraft](https://github.com/storytold/wordcraft)
 (MIT OR Apache-2.0). It is the engine of **AI Word** (`skills/ai-word`). Its sisters:
 `Neurons-AI/craft-i18n` (translations, a build input) and `Neurons-AI/gridcraft` (engine of AI Sheet).
 
-## Branches
+## Branch
 
-| Branch | What it is |
-|---|---|
-| `main` | Exactly upstream. Never commit here; it only fast-forwards from `upstream/main`. |
-| `aiword` | Our patches on top of `main` (branding "AI Word", no Discord/community links, …). Builds ship from here. |
-
-Keep every patch small and in `aiword` so a rebase on a new upstream stays easy.
+Everything lives on **`main`** (one branch only, since 2026-11-13): upstream WordCraft plus our
+AI Word patches. Builds ship from `main`; `engine.mjs push` pushes `main`.
 
 ## Remotes
 
 ```sh
-git remote -v   # origin = Neurons-AI/wordcraft (ours), upstream = storytold/wordcraft
+git remote -v   # origin = Neurons-AI/aiword (ours), upstream = storytold/wordcraft
 ```
 
 ## Pull a new upstream version
 
 ```sh
 git fetch upstream
-git checkout main && git merge --ff-only upstream/main && git push origin main
-git checkout aiword && git rebase main          # fix conflicts in our patches only
-git push --force-with-lease origin aiword
+git checkout main && git merge upstream/main     # fix conflicts in our patches only
+git push origin main
 ```
 
-Same for `craft-i18n` (it has no patches: just fast-forward `main`) and `gridcraft`.
+`craft-i18n` has no patches: just fast-forward its `main`.
 
 ## Build the web engine and ship it into AI Word
 
@@ -46,7 +41,7 @@ rm -f <workspace>/skills/ai-word/assets/wordcraft/.trunk-lock
 A release build takes about 5–10 min on an M1 Max. Then validate the app
 (`validate_app.mjs skills/ai-word --tier 0 --test`) and open it once in AICoworker.
 
-## Our patches (branch `aiword`)
+## Our patches (on `main`)
 
 - Product name: every UI string goes through `i18n::tr`, which now passes the text through
   `i18n::brand` (WordCraft/ArtCraft → AI Word) — one place covers English and all 28 languages.

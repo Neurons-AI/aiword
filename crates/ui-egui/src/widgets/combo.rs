@@ -384,13 +384,18 @@ fn missing_font_mark(ui: &Ui, resp: &egui::Response, current: &str, shown_as: Op
     let fetchable = in_font_catalog(current);
     let state = font_fetch_state(current);
     let busy = state == "downloading";
-    let click = if fetchable { Some(ui.interact(r.expand(3.0), resp.id.with("fontFetch"), egui::Sense::click())) } else { None };
-    if let Some(c) = &click {
-        if c.hovered() {
-            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-            ui.painter().rect_filled(r.expand(2.0), 3.0, t.hover);
-        }
-        if c.clicked() && !busy {
+    // The text field under the mark wins egui's hit test (it senses drags), so the mark reads the
+    // pointer itself: hover → hand cursor + highlight, a press on it → download (not field focus).
+    let over = fetchable && ui.input(|i| i.pointer.hover_pos()).is_some_and(|p| r.expand(3.0).contains(p));
+    let pressed = over && ui.input(|i| i.pointer.primary_pressed());
+    if over {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        ui.painter().rect_filled(r.expand(2.0), 3.0, t.hover);
+    }
+    if pressed {
+        // Keep the press from putting the caret in the field.
+        ui.memory_mut(|m| m.surrender_focus(resp.id));
+        if !busy {
             request_font_fetch(current);
         }
     }
@@ -412,8 +417,8 @@ fn missing_font_mark(ui: &Ui, resp: &egui::Response, current: &str, shown_as: Op
         } else {
             crate::i18n::fmt(tl!("{font} isn't on this computer yet. Click the mark to download it from Google Fonts."), &[("font", current)])
         };
-        if let Some(c) = click {
-            c.on_hover_text(note.as_str());
+        if over {
+            egui::Tooltip::always_open(ui.ctx().clone(), ui.layer_id(), resp.id.with("fontFetchTip"), egui::PopupAnchor::Pointer).show(|ui| ui.label(note.as_str()));
         }
     }
     ui.ctx().accesskit_node_builder(resp.id, |n| n.set_description(note.as_str()));
@@ -477,6 +482,10 @@ fn combo_impl(ui: &mut Ui, options: ComboOptions<'_>) -> Option<String> {
             resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::TextInput, ui.is_enabled(), tip));
         }
         let notes = missing_font_mark(ui, &resp, current, mark, &t);
+        // AI Word: one font menu. A click in the font box, or typing in it, opens the menu with
+        // its search box (what was typed carried over) instead of the old inline match list.
+        let open_menu = search && (resp.clicked() || resp.changed());
+        let carry = if search && resp.changed() { Some(text.clone()) } else { None };
         keytip_badge(ui, resp.rect, "combo", id);
         focused = resp.has_focus();
         let enter = resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
@@ -552,7 +561,7 @@ fn combo_impl(ui: &mut Ui, options: ComboOptions<'_>) -> Option<String> {
         let close = if search { egui::PopupCloseBehavior::CloseOnClickOutside } else { egui::PopupCloseBehavior::CloseOnClick };
         let mut menu_field = aresp.clone();
         menu_field.rect = resp.rect.union(ar);
-        let menu = craft_ui::combo::Menu::new(ui, &menu_field).close_behavior(close).height(420.0);
+        let menu = craft_ui::combo::Menu::new(ui, &menu_field).close_behavior(close).height(if search { 560.0 } else { 420.0 });
         let row_h = if preview.is_some() { COMBO_PREVIEW_ROW_H } else { ui.spacing().interact_size.y };
         // The recent section keeps its order while the list stays open: a pick moves the family to
         // the top for the next time the list opens, not under the pointer.
@@ -592,6 +601,15 @@ fn combo_impl(ui: &mut Ui, options: ComboOptions<'_>) -> Option<String> {
         let menu_popup_id = egui::Popup::default_response_id(&menu_field);
         if search && !egui::Popup::is_id_open(ui.ctx(), menu_popup_id) {
             ui.data_mut(|d| d.remove::<MenuFilter>(filter_id));
+        }
+        if open_menu {
+            let mut f: MenuFilter = ui.data(|d| d.get_temp(filter_id)).unwrap_or_default();
+            if let Some(q) = &carry {
+                f.q = q.clone();
+                f.focused = false;
+            }
+            ui.data_mut(|d| d.insert_temp(filter_id, f));
+            egui::Popup::open_id(ui.ctx(), menu_popup_id);
         }
         let header = |ui: &mut Ui| -> Option<std::sync::Arc<Vec<String>>> {
             let mut f: MenuFilter = ui.data(|d| d.get_temp(filter_id)).unwrap_or_default();
@@ -671,6 +689,9 @@ fn combo_impl(ui: &mut Ui, options: ComboOptions<'_>) -> Option<String> {
         });
         if let Some(v) = picked.flatten() {
             out = Some(v);
+        }
+        if search {
+            s.open = false;
         }
         let n = section_rows(recent_shown.len(), s.matches.len());
         if s.open && n > 0 {
