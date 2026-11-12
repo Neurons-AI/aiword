@@ -1,7 +1,7 @@
 {
   "repo": "https://github.com/Neurons-AI/aiword.git",
-  "tarball": "https://codeload.github.com/Neurons-AI/aiword/tar.gz/refs/heads/aiword",
-  "branch": "aiword",
+  "tarball": "https://codeload.github.com/Neurons-AI/aiword/tar.gz/refs/heads/main",
+  "branch": "main",
   "upstream": "https://github.com/storytold/wordcraft.git",
   "i18nRepo": "https://github.com/Neurons-AI/craft-i18n.git",
   "i18nTarball": "https://codeload.github.com/Neurons-AI/craft-i18n/tar.gz/refs/heads/main",

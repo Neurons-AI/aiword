@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // AI Word engine tool: the editor is the Rust app WordCraft (public fork Neurons-AI/aiword, branch
-// aiword) compiled to WebAssembly. This script is how an agent repairs and ships it — on ANY machine
+// main) compiled to WebAssembly. This script is how an agent repairs and ships it — on ANY machine
 // the app is installed on (a Store buyer too): it installs its own Rust tools and fetches the source.
 //
 //   node scripts/engine.mjs status            where things are, what build is shipped, what is missing
@@ -11,7 +11,7 @@
 //   node scripts/engine.mjs build-status      result of the last build (for --bg)
 //   node scripts/engine.mjs ship              swap the staged build in (backup kept) — after the owner said yes
 //   node scripts/engine.mjs rollback          put the previous build back
-//   node scripts/engine.mjs push "<message>"  commit the engine source change and push branch aiword
+//   node scripts/engine.mjs push "<message>"  commit the engine source change and push branch main
 //   node scripts/engine.mjs sync-app          mirror this app's source into the fork (aicw-app/) and push
 //
 // Every command prints one JSON line on stdout ({ok, …}); exit code 0 = ok.
