@@ -19,7 +19,7 @@ pub use buttons::{
 pub(crate) use buttons::{bg, run_from_ribbon};
 pub use combo::{
     ADD_FONT, COMBO_PREVIEW_ROW_H, DrawnState, FontComboOptions, LOAD_SYSTEM_FONTS, color_grid, combo, combo_hint, combo_list, drawn_state,
-    font_combo, font_combo_with_recent, font_combo_with_recent_hint, font_matches,
+    font_combo, font_combo_with_recent, font_combo_with_recent_hint, font_matches, set_font_catalog,
 };
 #[cfg(test)]
 use combo::{Row, highlight_row, section_row, section_rows};

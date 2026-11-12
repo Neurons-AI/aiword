@@ -900,9 +900,26 @@ pub fn status_bar(app: &mut WordApp, ui: &mut Ui) {
                         }
                         // Reading zoom changes only reading presentation, never the normal view zoom.
                         let mut v = if reading { app.session.view.read_zoom } else { app.canvas.scale / crate::canvas::PX_PER_PT };
-                        let slider = egui::Slider::new(&mut v, if reading { 0.75..=1.5 } else { 0.1..=5.0 }).logarithmic(!reading).show_value(false);
-                        ui.spacing_mut().slider_width = 110.0;
-                        let response = ui.add(slider);
+                        // AI Word: a thin Word-style zoom track (line + 100% tick + small thumb) instead of
+                        // egui's default slider, whose round handle drew as a large rounded box.
+                        let (lo, hi): (f32, f32) = if reading { (0.75, 1.5) } else { (0.1, 5.0) };
+                        let to_t = |x: f32| if reading { (x - lo) / (hi - lo) } else { (x.ln() - lo.ln()) / (hi.ln() - lo.ln()) };
+                        let from_t = |t: f32| if reading { lo + t * (hi - lo) } else { (lo.ln() + t * (hi.ln() - lo.ln())).exp() };
+                        let (rect, mut response) = ui.allocate_exact_size(egui::vec2(110.0, ui.spacing().interact_size.y), egui::Sense::click_and_drag());
+                        if let Some(p) = response.interact_pointer_pos() {
+                            let t = ((p.x - rect.left()) / rect.width()).clamp(0.0, 1.0);
+                            let nv = from_t(t);
+                            if (nv - v).abs() > f32::EPSILON { v = nv; response.mark_changed(); }
+                        }
+                        let tc = Tokens::get(ui.ctx());
+                        let painter = ui.painter_at(rect.expand(2.0));
+                        let y = rect.center().y;
+                        painter.line_segment([egui::pos2(rect.left(), y), egui::pos2(rect.right(), y)], egui::Stroke::new(1.0, tc.text_dim));
+                        let mid = rect.left() + rect.width() * to_t(1.0).clamp(0.0, 1.0);
+                        painter.line_segment([egui::pos2(mid, y - 4.0), egui::pos2(mid, y + 4.0)], egui::Stroke::new(1.0, tc.text_dim));
+                        let x = rect.left() + rect.width() * to_t(v).clamp(0.0, 1.0);
+                        let thumb = egui::Rect::from_center_size(egui::pos2(x, y), egui::vec2(4.0, 12.0));
+                        painter.rect_filled(thumb, 1.0, if response.hovered() || response.dragged() { tc.accent } else { tc.text });
                         response.widget_info(|| {
                             egui::WidgetInfo::labeled(egui::Role::Slider, ui.is_enabled(), if reading { tl!("Text Size") } else { tl!("Zoom") })
                         });

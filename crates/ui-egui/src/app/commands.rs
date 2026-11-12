@@ -769,6 +769,14 @@ impl WordApp {
                         .into(),
                 ));
             }
+            "ui.fontCatalog" => {
+                // AI Word: extra families (the Google Fonts catalog) listed in every font box after
+                // the installed ones. Picking one applies it as typed; the host downloads it.
+                let names: Vec<String> = p.get("names").and_then(Value::as_array).map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()).unwrap_or_default();
+                let n = names.len();
+                crate::widgets::set_font_catalog(names);
+                json!({"count": n})
+            }
             "ui.discord" => {
                 self.canvas.open_url = Some("https://discord.gg/artcraft".into());
                 json!({})
@@ -1117,6 +1125,7 @@ pub(crate) fn works_without_document(id: &str) -> bool {
             | "ui.fileBrowser"
             | "ui.makeDefaultApp"
             | "ui.discord"
+            | "ui.fontCatalog"
             | "ui.caretAnimation"
             | "ui.startScreen"
             | "ui.recentRemove"

@@ -177,7 +177,30 @@ pub struct FontComboOptions<'a> {
     pub shown_as: Option<&'a str>,
 }
 
+static FONT_CATALOG: std::sync::RwLock<Vec<String>> = std::sync::RwLock::new(Vec::new());
+
+/// AI Word: families offered in every font box after the installed ones (`ui.fontCatalog`).
+pub fn set_font_catalog(names: Vec<String>) {
+    if let Ok(mut c) = FONT_CATALOG.write() {
+        *c = names;
+    }
+}
+
+/// `items` followed by the catalog families not already in it.
+fn with_catalog(items: &[String]) -> Option<Vec<String>> {
+    let cat = FONT_CATALOG.read().ok()?;
+    if cat.is_empty() {
+        return None;
+    }
+    let have: std::collections::HashSet<String> = items.iter().map(|s| s.to_lowercase()).collect();
+    let mut all = items.to_vec();
+    all.extend(cat.iter().filter(|n| !have.contains(&n.to_lowercase())).cloned());
+    Some(all)
+}
+
 pub fn font_combo_with_recent_hint(ui: &mut Ui, options: FontComboOptions<'_>) -> Option<String> {
+    let merged = with_catalog(options.items);
+    let items: &[String] = merged.as_deref().unwrap_or(options.items);
     combo_impl(
         ui,
         ComboOptions {
@@ -185,7 +208,7 @@ pub fn font_combo_with_recent_hint(ui: &mut Ui, options: FontComboOptions<'_>) -
             id: options.id,
             width: options.width,
             current: options.current,
-            items: options.items,
+            items,
             recent: options.recent,
             preview: options.preview,
             tip: options.tip,
