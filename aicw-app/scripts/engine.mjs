@@ -29,6 +29,7 @@ const DATA = process.env.AIWORD_DATA || path.join(APP, 'data', 'engine');
 const where = (p) => (/^~(\/|$)/.test(p) ? p.replace(/^~/, os.homedir()) : path.isAbsolute(p) ? p : path.join(DATA, p));
 const SRC = where(cfg.checkout);
 const I18N = where(cfg.i18nCheckout);
+// aicw:installs cargo rustc trunk — the engine tool downloads its own pinned Rust into the app's data folder (never the machine's)
 const TOOLS = where(cfg.toolchainDir || 'toolchain');
 const RUSTUP_HOME = path.join(TOOLS, 'rustup');
 const CARGO_HOME = path.join(TOOLS, 'cargo');

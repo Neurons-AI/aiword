@@ -406,6 +406,12 @@
   },
   "secrets": [],
   "requires": {
-    "aicoworker": ">=2026.8.5"
+    "aicoworker": ">=2026.8.5",
+    "runtimes": [
+      {
+        "id": "git",
+        "required": false
+      }
+    ]
   }
 }
