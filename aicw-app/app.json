@@ -2,7 +2,7 @@
   "schema": "aicw.app.v1",
   "name": "AI Word",
   "icon": "📝",
-  "version": "0.1.0",
+  "version": "1.0.3",
   "description": "Trình soạn thảo kiểu MS Word trong AICoworker: ribbon, kiểu, bảng, theo dõi thay đổi, tham chiếu, trộn thư; mở/lưu .docx .doc .odt .rtf .html .md .tex .txt, xuất PDF; trợ lý AI viết hộ.",
   "window": {
     "entry": "assets/app.html",

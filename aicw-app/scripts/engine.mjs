@@ -269,6 +269,26 @@ const cmds = {
       }
     };
     walk();
+    // AICoworker builds an app in a folder named <name>-dev; the mirror in the repository is the RELEASE:
+    // every <name>-dev in its text files is written as <name> (the same change `pack` makes).
+    const devName = path.basename(APP);
+    if (/.-dev$/.test(devName)) {
+      const relName = devName.slice(0, -4);
+      const re = new RegExp(devName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![a-z0-9])', 'g');
+      const release = (rel = '') => {
+        for (const e of fs.readdirSync(path.join(dest, rel), { withFileTypes: true })) {
+          const r = rel ? `${rel}/${e.name}` : e.name;
+          if (e.isDirectory()) { release(r); continue; }
+          if (!/\.(md|json|mjs|cjs|js|html|css|txt)$/i.test(e.name)) continue;
+          const file = path.join(dest, r);
+          const text = fs.readFileSync(file, 'utf8');
+          const next = text.replace(re, relName);
+          // aicw:shared — the maintainer's mirror of the app in the engine repository
+          if (next !== text) fs.writeFileSync(file, next);
+        }
+      };
+      release();
+    }
     // aicw:shared — the maintainer's mirror of the app in the engine repository
     fs.writeFileSync(path.join(dest, 'README.md'), `# AI Word — AICoworker AI App\n\nThis folder is a mirror of the installed AI App (\`skills/ai-word\`), kept next to the engine it runs.\nThe engine (\`apps/wordcraft-web\`, the crates) builds to \`assets/wordcraft/\` with \`scripts/engine.mjs build\` — that\nbuild is not committed here. Update this mirror with \`node scripts/engine.mjs sync-app\` from the installed app.\n`);
     git('add', cfg.appMirror);

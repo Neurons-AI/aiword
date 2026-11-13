@@ -1,7 +1,9 @@
 # Neurons AI fork — engine for the AICoworker Office apps
 
 This is the Neurons AI public fork of [storytold/wordcraft](https://github.com/storytold/wordcraft)
-(MIT OR Apache-2.0). It is the engine of **AI Word** (`skills/ai-word`). Its sisters:
+(MIT OR Apache-2.0). It is the engine of **AI Word** (`skills/ai-word`; the copy it is built and changed in is `skills/ai-word-dev` —
+AICoworker never edits the copy installed from the AICW Store, and releases from the `-dev` folder with
+`dev_app.mjs <dir> pack`: name without `-dev`, version minor + 1). Its sisters:
 `Neurons-AI/craft-i18n` (translations, a build input) and `Neurons-AI/gridcraft` (engine of AI Sheet).
 
 ## Branch
@@ -32,14 +34,14 @@ Needs rustc (see `rust-toolchain.toml`), the `wasm32-unknown-unknown` target and
 ```sh
 cd apps/wordcraft-web
 CRAFT_I18N_DIR=<path to Neurons-AI/craft-i18n checkout at the rev in craft-i18n.rev> trunk build --release
-rm -rf <workspace>/skills/ai-word/assets/wordcraft && mkdir -p $_
-cp -R ../../dist/web/. <workspace>/skills/ai-word/assets/wordcraft/
-cp ../../LICENSE-MIT ../../NOTICE <workspace>/skills/ai-word/assets/wordcraft/
-rm -f <workspace>/skills/ai-word/assets/wordcraft/.trunk-lock
+rm -rf <workspace>/skills/ai-word-dev/assets/wordcraft && mkdir -p $_
+cp -R ../../dist/web/. <workspace>/skills/ai-word-dev/assets/wordcraft/
+cp ../../LICENSE-MIT ../../NOTICE <workspace>/skills/ai-word-dev/assets/wordcraft/
+rm -f <workspace>/skills/ai-word-dev/assets/wordcraft/.trunk-lock
 ```
 
 A release build takes about 5–10 min on an M1 Max. Then validate the app
-(`validate_app.mjs skills/ai-word --tier 0 --test`) and open it once in AICoworker.
+(`validate_app.mjs skills/ai-word-dev --tier 0 --test`) and open it once in AICoworker.
 
 ## Our patches (on `main`)
 
