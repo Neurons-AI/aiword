@@ -70,5 +70,64 @@
     ]
    ]
   }
+ },
+ {
+  "command": "assist",
+  "args": {
+   "prompt": "Make the title bold"
+  },
+  "mock": {
+   "llm.complete": {
+    "text": "{\"reply\":\"Done.\",\"actions\":[{\"command\":\"format.bold\",\"paramsJson\":\"{}\"}]}"
+   }
+  },
+  "expect": {
+   "reply": "Done."
+  }
+ },
+ {
+  "command": "reportEngineBug",
+  "args": {
+   "message": "panicked at crates/model/src/doc.rs:10:5:\nsmoke test",
+   "kind": "panic",
+   "build": "test"
+  },
+  "mock": {
+   "agent.send": {}
+  },
+  "expect": {
+   "sent": true
+  }
+ },
+ {
+  "command": "reportEngineBug",
+  "args": {
+   "message": "panicked at crates/model/src/doc.rs:10:5:\nsmoke test",
+   "kind": "panic",
+   "build": "test"
+  },
+  "mock": {
+   "agent.send": {}
+  },
+  "expect": {
+   "already": true
+  }
+ },
+ {
+  "command": "googleFonts",
+  "args": {
+   "query": "roboto",
+   "limit": 3
+  }
+ },
+ {
+  "command": "googleFontFiles",
+  "args": {
+   "family": "Roboto"
+  },
+  "expect": {
+   "family": "Roboto",
+   "found": true
+  }
  }
 ]

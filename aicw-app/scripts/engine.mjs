@@ -54,6 +54,7 @@ const sh = (cmd, args, opts = {}) => {
 };
 const git = (...a) => sh('git', ['-C', SRC, ...a]);
 const readState = () => { try { return JSON.parse(fs.readFileSync(STATE, 'utf8')); } catch { return {}; } };
+// aicw:shared — the engine's build state of THIS machine (one engine per install, nobody's data)
 const writeState = (s) => fs.writeFileSync(STATE, JSON.stringify({ ...readState(), ...s }, null, 2));
 const wasmHash = (dir) => { try { const f = fs.readdirSync(dir).find((n) => /_bg\.wasm$/.test(n)); return f ? f.replace(/^wordcraft-web-|_bg\.wasm$/g, '') : null; } catch { return null; } };
 const shippedBuild = () => (/const BUILD = '([a-f0-9]+)'/.exec(fs.readFileSync(PAGE, 'utf8')) || [])[1] || null;
@@ -64,6 +65,7 @@ async function download(url, file) {
   const res = await fetch(url, { redirect: 'follow' });
   if (!res.ok) out({ ok: false, error: `download failed ${res.status}`, url });
   fs.mkdirSync(path.dirname(file), { recursive: true });
+  // aicw:shared — a download of the engine's build tools / source, the same for every person
   fs.writeFileSync(file, Buffer.from(await res.arrayBuffer()));
 }
 
@@ -219,6 +221,7 @@ const cmds = {
     }
     copyDir(b.staged, ASSETS);
     const page = fs.readFileSync(PAGE, 'utf8').replace(/const BUILD = '[a-f0-9]*'/, `const BUILD = '${b.hash}'`);
+    // aicw:shared — the page now loads the newly shipped engine build (the app itself, not anyone's data)
     fs.writeFileSync(PAGE, page);
     fs.rmSync(STAGING, { recursive: true, force: true });
     writeState({ shipped: { hash: b.hash, previous: prev, at: new Date().toISOString(), head: b.head } });
@@ -232,6 +235,7 @@ const cmds = {
     fs.rmSync(ASSETS, { recursive: true, force: true });
     fs.renameSync(path.join(BACKUPS, last), ASSETS);
     const hash = wasmHash(ASSETS);
+    // aicw:shared — the page loads the build that was put back
     fs.writeFileSync(PAGE, fs.readFileSync(PAGE, 'utf8').replace(/const BUILD = '[a-f0-9]*'/, `const BUILD = '${hash}'`));
     writeState({ shipped: { hash, rolledBackFrom: last, at: new Date().toISOString() } });
     out({ ok: true, restored: hash });
@@ -264,6 +268,7 @@ const cmds = {
       }
     };
     walk();
+    // aicw:shared — the maintainer's mirror of the app in the engine repository
     fs.writeFileSync(path.join(dest, 'README.md'), `# AI Word — AICoworker AI App\n\nThis folder is a mirror of the installed AI App (\`skills/ai-word\`), kept next to the engine it runs.\nThe engine (\`apps/wordcraft-web\`, the crates) builds to \`assets/wordcraft/\` with \`scripts/engine.mjs build\` — that\nbuild is not committed here. Update this mirror with \`node scripts/engine.mjs sync-app\` from the installed app.\n`);
     git('add', cfg.appMirror);
     const c = git('commit', '-q', '-m', 'AI Word app: sync aicw-app/ from the installed AI App');
