@@ -7,6 +7,17 @@ description: "AI Word — trình soạn thảo kiểu MS Word (giao diện ribbo
 
 Mở cửa sổ: `artifact` `{"action":"create","app":"ai-word"}`.
 
+## Page tools (how you read and change the open document)
+
+The document lives in the window, not in the backend. The window offers page tools; call them with
+`app` → `{"action":"page","id":"app-<this skill>","tool":"…","args":{…}}` (no `tool` = the list):
+`document {from?, count?}` (blocks with index, style, text; the selection), `find_commands {search}`,
+`run {actions:[{command, params}]}`. Read before you answer or change anything, and read again
+after a change — the person edits between turns. The ✨ box in the window is the same thing: one
+turn of this chat (`aicw.ask`).
+
+
+
 ## Cấu tạo
 
 | Phần | Ở đâu | Là gì |

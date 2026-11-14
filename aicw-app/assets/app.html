@@ -287,6 +287,51 @@
   $('form').onsubmit = (e) => { e.preventDefault(); const q = $('q'); if (q.value.trim()) { ask(q.value.trim()); q.value = ''; } };
   $('q').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('form').requestSubmit(); } });
 
+  // ── Page tools: how the agent in this app's chat reads and changes the OPEN document ──
+  // The document lives here in the page (the WASM editor). The assistant's turn runs in the chat
+  // that hosts this window; with these it reads the text, edits, and reads again to check.
+  const small = (v, max) => { const j = JSON.stringify(v === undefined ? null : v); return j.length <= max ? v : { truncated: true, chars: j.length, preview: j.slice(0, max), hint: 'too large: ask for fewer blocks (from / count)' }; };
+  function exposeTools() {
+    if (!(window.aicw && aicw.expose)) return;
+    aicw.expose({
+      document: {
+        description: 'The open document: its blocks (index, style, text) and the selection (anchor / focus positions). from + count give a part of a long document (blocks are numbered from 0). Call it first, and again after a change to check it.',
+        args: { from: 'first block index (default 0)', count: 'how many blocks (default 80)' },
+        run: async (a) => {
+          const d = await api.docInspect({ text: true });
+          const from = Math.max(0, Number(a.from) || 0), count = Math.max(1, Math.min(Number(a.count) || 80, 400));
+          if (d && Array.isArray(d.blocks)) return small({ ...d, totalBlocks: d.blocks.length, from, blocks: d.blocks.slice(from, from + count).map((b, i) => (b && typeof b === 'object' ? { index: from + i, ...b } : b)) }, 28000);
+          return small(d, 28000);
+        }
+      },
+      find_commands: {
+        description: 'Search the editor commands by keyword: ids with their parameters (e.g. "table", "heading", "comment", "page"). Use it before `run` when unsure of an id or its params.',
+        args: { search: 'keyword' },
+        run: async (a) => small(await api.commands({ search: String(a.search || '') }), 16000)
+      },
+      run: {
+        mutating: true,
+        description: 'Run editor commands on the open document, in order; returns ok / error per command. Common ids: select.text {text, occurrence?} selects a phrase; select.range {anchor, focus} with positions exactly as `document` gives them ({story:"body", path:[blockIndex], off:byteOffset}); select.paragraph {}; select.all {}; text.insert {text, paragraphs?:true} inserts at the caret and replaces the selection (paragraphs:true = each line a paragraph); text.newParagraph {}; styles.apply {style:"Heading 1"|"Heading 2"|"Title"|"Normal"}; format.bold / format.italic {}; para.bullets / para.numbering / para.alignCenter {}; insert.table {rows, cols}. To rewrite a phrase: select.text with the exact old phrase, then text.insert with the new text. The person sees every change at once (Ctrl+Z undoes).',
+        args: { actions: 'array of {command: "<id>", params: {…}}, at most 40' },
+        run: async (a) => {
+          const list = Array.isArray(a.actions) ? a.actions.slice(0, 40) : a.command ? [a] : [];
+          if (!list.length) throw new Error('actions is required: [{command, params}]');
+          const out = []; let ok = 0;
+          for (const x of list) {
+            const cmd = x && x.command; let prm = (x && x.params) || {};
+            if (x && typeof x.paramsJson === 'string') { try { prm = JSON.parse(x.paramsJson || '{}') || {}; } catch { prm = {}; } }
+            if (!cmd) { out.push({ ok: false, error: 'no command' }); continue; }
+            try { const r = await api.execute(String(cmd), prm); if (r && r.ok === false) out.push({ command: cmd, ok: false, error: String(r.error || 'failed').slice(0, 300) }); else { ok++; out.push({ command: cmd, ok: true }); } }
+            catch (e) { out.push({ command: cmd, ok: false, error: String(e && e.message || e).slice(0, 300) }); }
+          }
+          return { ran: ok, failed: list.length - ok, results: out };
+        }
+      }
+    });
+  }
+  exposeTools();
+  const hasAgent = () => { try { return !!(window.aicw && aicw.ask && aicw.exposed && aicw.has && aicw.has('ai')); } catch { return false; } };
+
   async function context(api) {
     const doc = await api.docInspect({ text: true }).catch(() => null);
     return doc;
@@ -311,6 +356,18 @@
       await (window.aicw && aicw.ready ? aicw.ready() : null);
       if (!(window.aicw && aicw.call)) { wait.textContent = tr('noai'); return; }
       const api = await waitWc();
+      if (hasAgent()) {
+        // The assistant = one turn of the chat that hosts this window: it reads the document with the
+        // page tools above, edits it, checks the result, and answers here.
+        exposeTools();
+        const d = await api.docInspect({ text: true }).catch(() => null);
+        const blocks = (d && Array.isArray(d.blocks)) ? d.blocks : [];
+        const head = blocks.slice(0, 12).map((b, i) => i + ': ' + String((b && (b.text || b.style)) || '').slice(0, 90)).join('\n');
+        const context = ['Blocks in the document: ' + blocks.length, 'Selection: ' + JSON.stringify(d && d.selection || null).slice(0, 400), 'Interface language: ' + short(), 'First blocks:', head].join('\n');
+        const r = await aicw.ask(question, { context, timeoutMs: 280000 });
+        wait.textContent = r && r.state === 'working' ? tr('think') : ((r && (r.content || r.text)) || tr('done'));
+        return;
+      }
       const doc = await context(api);
       const docTxt = JSON.stringify(doc || {});
       const prompt = `You are the writing assistant inside AI Word (a Word-compatible word processor).
