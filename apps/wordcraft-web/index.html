@@ -1,6 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>/* AI Word: keep answering in a tab that is not shown. Two things stop there in a browser: (1) requestAnimationFrame — the engine does its work in frames, also what the assistant asks of it through the page tools; (2) ResizeObserver — the engine waits for its first size report before its first frame, so an editor OPENED in a background tab never started at all (measured 2026-11-14: no answer until the tab was shown). While the page is hidden, a worker's clock runs the waiting frames ten times a second (a worker is not slowed down like a page timer) and a size report that did not come is made from the element's own box; shown again, the browser's own frames and reports take over. */
+(function(){try{var hidden=function(){return document.visibilityState==="hidden"};
+var raf=window.requestAnimationFrame.bind(window),seq=0,pend={},tick=null,jobs=[];
+function run(id){var cb=pend[id];if(!cb)return;delete pend[id];cb(performance.now())}
+function later(e){setTimeout(function(){throw e},0)}
+function flush(){if(!hidden()){stop();return}var j=jobs;jobs=[];for(var i=0;i<j.length;i++){try{j[i]()}catch(e){later(e)}}for(var id in pend){try{run(id)}catch(e){later(e)}}}
+function stop(){if(!tick)return;try{if(tick.terminate)tick.terminate();else clearInterval(tick)}catch(e){}tick=null}
+function start(){if(tick)return;try{var w=new Worker(URL.createObjectURL(new Blob(["setInterval(function(){postMessage(0)},100)"],{type:"text/javascript"})));w.onmessage=flush;tick=w}catch(e){tick=setInterval(flush,250)}}
+window.requestAnimationFrame=function(cb){var id=++seq;pend[id]=cb;raf(function(){run(id)});if(hidden())start();return id};
+window.cancelAnimationFrame=function(id){delete pend[id]};
+document.addEventListener("visibilitychange",function(){if(hidden())start()});
+var RO=window.ResizeObserver;
+if(RO&&window.ResizeObserverEntry&&window.ResizeObserverSize){
+var def=function(o,k,v){Object.defineProperty(o,k,{value:v,enumerable:true})};
+var size=function(w,h){var s=Object.create(ResizeObserverSize.prototype);def(s,"inlineSize",w);def(s,"blockSize",h);return s};
+var entry=function(el){var r=el.getBoundingClientRect(),d=window.devicePixelRatio||1,e=Object.create(ResizeObserverEntry.prototype);def(e,"target",el);def(e,"contentRect",r);def(e,"contentBoxSize",[size(r.width,r.height)]);def(e,"borderBoxSize",[size(r.width,r.height)]);def(e,"devicePixelContentBoxSize",[size(Math.round(r.width*d),Math.round(r.height*d))]);return e};
+var Wrapped=function(cb){var self=this,seen=[];var real=new RO(function(en){for(var i=0;i<en.length;i++)seen.push(en[i].target);cb(en,self)});
+this.observe=function(el,opt){real.observe(el,opt);if(!hidden())return;var n=0;var ask=function(){if(seen.indexOf(el)>=0||!hidden())return;var r=el.getBoundingClientRect();if((r.width<1||r.height<1)&&n++<50){jobs.push(ask);return}seen.push(el);cb([entry(el)],self)};jobs.push(ask);start()};
+this.unobserve=function(el){real.unobserve(el)};this.disconnect=function(){real.disconnect()}};
+Wrapped.prototype=RO.prototype;window.ResizeObserver=Wrapped}
+}catch(e){}})();</script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>AI Word</title>
